@@ -1,0 +1,171 @@
+---
+title: "Mood/Glucose Capstone Project"
+author: "Donald Dinerman (ddinerma)"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = T, warning = T, message = F)
+```
+
+# Data Intro
+```{r}
+library(tidyverse)
+```
+
+```{r}
+raw_data <- read.csv("complete_f_s_afterexclude.csv")
+```
+
+```{r}
+head(raw_data)
+```
+
+
+```{r}
+dim(raw_data)
+unique(raw_data$respid) %>% length() # n Respondents (88)
+```
+
+```{r}
+library(cowplot)
+library(ggrepel)
+library(ggtext)
+
+# library(showtext)
+# font_add_google("Lato")
+# showtext_auto()
+```
+
+```{r}
+#https://r-graph-gallery.com/web-line-chart-with-labels-at-end-of-line.html
+# Later: Create custom theme for plots
+```
+
+
+```{r}
+resp_df <- raw_data %>%
+  dplyr::select(respid, spring, datetime_ema, emanum0, TBR_s, TBR_d, TBR_prop_1h, TIR_prop_1h, TIR_prop_2h, TIR_d, TIR_s, bg_mean_1h, bg_mean_s, bg_mean_d, TAR_s)
+
+# EDA BG
+## BG Daily
+bg_d_df <- resp_df %>%
+  mutate(get_date = sub("T.*", "", datetime_ema)) %>%
+  group_by(respid, get_date, spring) %>%
+  summarise(bg_d_avg = mean(bg_mean_d))
+
+na_resp <- bg_d_df[!complete.cases(bg_d_df), ] %>% 
+  dplyr::select(respid)
+
+bg_d_id_df <- bg_d_df %>%
+  dplyr::filter(!(respid %in% na_resp$respid)) %>%
+  group_by(respid, spring) %>%
+  mutate(id=row_number())
+
+total_avg_bg_d <- bg_d_id_df %>%
+  group_by(id, spring) %>%
+  summarise(tot_avg_bg_d = mean(bg_d_avg)) %>%
+  dplyr::filter(id < 5)
+
+p_spring <- bg_d_id_df %>%
+  dplyr::filter(spring == 0) %>%
+  ggplot() +
+  geom_line(aes(x = id, y = bg_d_avg, col = as.factor(respid)), alpha =  0.2, size = 0.1, show.legend = F) +
+  geom_line(data = dplyr::filter(total_avg_bg_d, spring == 0), aes(x = id, y = tot_avg_bg_d), col = "blue") +
+  labs(x = "Day #", y = "Blood Glucose Level (mg/dL)", title = "Fall")
+
+p_fall <- bg_d_id_df %>%
+  dplyr::filter(spring == 1, id < 5) %>%
+  ggplot() +
+  geom_line(aes(x = id, y = bg_d_avg, col = as.factor(respid)), alpha =  0.2, size = 0.1, show.legend = F) +
+  geom_line(data = dplyr::filter(total_avg_bg_d, spring == 1), aes(x = id, y = tot_avg_bg_d), col = "blue") +
+  labs(x = "Day #", y = "Blood Glucose Level (mg/dL)", title = "Spring")
+
+## BG Season
+p_bg <- resp_df %>%
+  group_by(respid, spring) %>%
+  summarise(bg_s_avg = mean(bg_mean_s)) %>%
+  ggplot() +
+  geom_density(aes(x = bg_s_avg, col = as.factor(spring)), show.legend = F) +
+  scale_colour_manual(values =c('0'='black','1'='red'), labels = c('Fall','Spring')) +
+  geom_vline(xintercept = 70, linetype="dotdash") +
+  geom_vline(xintercept = 180, linetype="dotdash") +
+  geom_text(aes(x=80, label="\n70", y=0.013), colour="black", angle=0, size = 10/.pt, inherit.aes = FALSE) +
+  geom_text(aes(x=190, label="\n180", y=0.013), colour="black", angle=0, size = 10/.pt, inherit.aes = FALSE) +
+  labs(x = "Average Seasonal Blood Glucose (mg/dL)", y = "Density of Respondents", col = "Season")
+
+## TAR Season
+p_tar <- resp_df %>%
+  group_by(respid, spring) %>%
+  summarise(tar_s_avg = mean(TAR_s)) %>%
+  ggplot() +
+  geom_density(aes(x = tar_s_avg, col = as.factor(spring))) +
+  scale_colour_manual(values =c('0'='black','1'='red'), labels = c('Fall','Spring')) +
+  labs(x = "Proportion of Time Above Range", y = "", col = "Season")
+
+# TBR Season
+p_tbr <- resp_df %>%
+  group_by(respid, spring) %>%
+  summarise(bg_s_avg = mean(TBR_s)) %>%
+  ggplot() +
+  geom_density(aes(x = bg_s_avg, col = as.factor(spring)), show.legend = F) +
+  scale_colour_manual(values =c('0'='black','1'='red'), labels = c('Fall','Spring')) +
+  labs(x = "Proportion of Time Below Range", y = "Density of Respondents", col = "Season")
+
+# TIR Season
+p_tir <- resp_df %>%
+  group_by(respid, spring) %>%
+  summarise(bg_s_avg = mean(TIR_s)) %>%
+  ggplot() +
+  geom_density(aes(x = bg_s_avg, col = as.factor(spring)), show.legend = F) +
+  scale_colour_manual(values =c('0'='black','1'='red'), labels = c('Fall','Spring')) +
+  labs(x = "Proportion of Time in Range", y = "", col = "Season")
+
+plot_grid(p_spring, p_fall)
+
+plot_grid(p_bg, p_tar, p_tbr, p_tir)
+```
+
+
+
+```{r}
+# Respondents freq
+resp_freq <- raw_data %>%
+  group_by(respid) %>%
+  summarise(count = n())
+
+ggplot(resp_freq) +
+  geom_histogram(aes(x = count), col = "black", fill = "steelblue", binwidth = 5) +
+  labs(x = "Data Entry Frequency", y = "# of Respondents")
+
+# By season
+resp_freq_szn <- raw_data %>%
+  group_by(respid, spring) %>%
+  summarise(count = n())
+
+ggplot(resp_freq_szn) +
+  geom_density(aes(x = count, col = as.factor(spring))) +
+  scale_colour_manual(values =c('0'='black','1'='red'), labels = c('Fall','Spring')) +
+  labs(x = "Data Entry Frequency", y = "Density of Respondents", col = "Season")
+```
+
+
+# CGM Analytic Packages
+
+```{r}
+# https://github.com/RyanJ-Shao/CGMTSA
+# Continuous Glucose Monitoring Time Series Data Analysis (CGMTSA) User Guide
+# The R package Continuous Glucose Monitoring Time Series Data Analysis (CGMTSA) was developed to facilitate investigations that examine the continuous glucose monitoring (CGM) data as a time series. Accordingly, novel time series functions were introduced to (1) enable more accurate missing data imputation and outlier identification; (2) calculate recommended CGM metrics as well as key time series parameters; (3) plot interactive and three-dimensional graphs that allow direct visualizations of temporal CGM data and time series model optimization.
+```
+
+```{r}
+# https://cran.r-project.org/web/packages/cgmanalysis/cgmanalysis.pdf
+# Package ‘cgmanalysis’
+# provides several different functions for cleaning and analyzing continuous glucose monitor data. 
+# Currently it works with 'Dexcom', 'iPro 2', 'Diasend', 'Libre', or 'Carelink' data. 
+```
+
