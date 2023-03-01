@@ -15,6 +15,7 @@ knitr::opts_chunk$set(echo = T, warning = T, message = F)
 # Data Intro
 ```{r}
 library(tidyverse)
+library(kableExtra)
 ```
 
 ```{r}
@@ -52,7 +53,11 @@ library(ggtext)
 ### Response
 ```{r}
 resp_df <- raw_data %>%
-  dplyr::select(respid, spring, datetime_ema, emanum0, TBR_s, TBR_d, TBR_prop_1h, TIR_prop_1h, TIR_prop_2h, TIR_d, TIR_s, bg_mean_1h, bg_mean_s, bg_mean_d, TAR_s)
+  dplyr::select(respid, spring, tbh1female, datetime_ema, emanum0, 
+                TBR_s, TBR_d, TBR_prop_1h, 
+                TIR_prop_1h, TIR_prop_2h, TIR_d, TIR_s, 
+                bg_mean_1h, bg_mean_s, bg_mean_d, 
+                TAR_s)
 
 # EDA BG
 ## BG Daily
@@ -155,9 +160,81 @@ ggplot(resp_freq_szn) +
 ```
 
 ```{r}
+# Number of woman/men/nb
+## Fall
+# Change gender to factor
+resp_gen_df <- resp_df %>%
+  mutate(
+    gender = case_when(
+      tbh1female == 0 ~ "Male",
+      tbh1female == 1 ~ "Female",
+      tbh1female == 2 ~ "Non Binary"),
+    spring = ifelse(spring==0, "Fall", "Spring"), 
+                    .keep = "unused")
+  
+resp_gen_df %>%
+  group_by(respid, spring) %>%
+  slice(1) %>%
+  dplyr::filter(spring == "Fall") %>%
+  ungroup() %>%
+  count(gender) %>% 
+  pivot_wider(names_from = gender, values_from = n) %>%
+  kbl(caption = "Fall Gender Counts") %>%
+  kable_styling()
+
+## Spring
+resp_gen_df %>%
+  group_by(respid, spring) %>%
+  slice(1) %>%
+  dplyr::filter(spring == "Spring") %>%
+  ungroup() %>%
+  count(gender) %>% 
+  pivot_wider(names_from = gender, values_from = n) %>%
+  kbl(caption = "Spring Gender Counts") %>%
+  kable_styling()
+```
+
+```{r}
 # Graphs and Descriptive Statistics
 # CGM for male/female
-# Number of woman/men
+# These give different values because in the latter we weight individuals with more obs and in the former everyone has equal weights
+# How to get proper sd
+resp_gen_df %>%
+  group_by(respid, gender) %>%
+  summarise(bg_s_avg = mean(bg_mean_s),
+            bg_s_sd = sd(bg_mean_s, na.rm = T),
+            bg_s_median = median(bg_mean_s)) %>%
+  ungroup() %>%
+  group_by(gender) %>%
+  summarise(bg_s_avg = mean(bg_s_avg),
+            bg_s_sd = mean(bg_s_sd), # average of indivdual sd
+            bg_s_median = mean(bg_s_median)) %>% # average of indivdual median
+  kbl(caption = "CGM Statistics by Gender") %>%
+  kable_styling()
+
+resp_gen_df %>%
+  group_by(gender) %>%
+  summarise(bg_s_avg = mean(bg_mean_s),
+            bg_s_sd = sd(bg_mean_s, na.rm = T),
+            bg_s_median = median(bg_mean_s)) %>%
+  kbl(caption = "CGM Statistics by Gender") %>%
+  kable_styling()
+```
+
+```{r}
+# CGM Graphics colored/faceted by gender
+ resp_gen_df %>%
+  group_by(respid, spring, gender) %>%
+  summarise(bg_s_avg = mean(bg_mean_s)) %>%
+  filter(gender != "Non Binary") %>%
+  ggplot() +
+  geom_density(aes(x = bg_s_avg, col = gender)) +
+  #geom_vline(xintercept = 70, linetype="dotdash") +
+  #geom_vline(xintercept = 180, linetype="dotdash") +
+  #geom_text(aes(x=80, label="\n70", y=0.013), colour="black", angle=0, size = 10/.pt, inherit.aes = FALSE) +
+  #geom_text(aes(x=190, label="\n180", y=0.013), colour="black", angle=0, size = 10/.pt, inherit.aes = FALSE) +
+  facet_grid(~spring) +
+  labs(x = "Average Seasonal Blood Glucose (mg/dL)", y = "Density of Respondents", col = "Gender")
 ```
 
 
