@@ -46,7 +46,10 @@ library(ggtext)
 # Later: Create custom theme for plots
 ```
 
+# EDA
 
+## Univariate
+### Response
 ```{r}
 resp_df <- raw_data %>%
   dplyr::select(respid, spring, datetime_ema, emanum0, TBR_s, TBR_d, TBR_prop_1h, TIR_prop_1h, TIR_prop_2h, TIR_d, TIR_s, bg_mean_1h, bg_mean_s, bg_mean_d, TAR_s)
@@ -130,8 +133,6 @@ plot_grid(p_spring, p_fall)
 plot_grid(p_bg, p_tar, p_tbr, p_tir)
 ```
 
-
-
 ```{r}
 # Respondents freq
 resp_freq <- raw_data %>%
@@ -153,6 +154,54 @@ ggplot(resp_freq_szn) +
   labs(x = "Data Entry Frequency", y = "Density of Respondents", col = "Season")
 ```
 
+```{r}
+# CGM for male/female
+# Number of woman/men
+```
+
+
+### Predictors
+
+```{r}
+# Highlighted Predictors
+# c(Zperneg, Zperpos, zdmwell, zpa, zna, zfrconfl, zfrsupp)
+# Some of these variables are not in the dataset
+# Not clear what frconfl, frsupp is
+# Issue missing data for many "important" predictors
+
+x_df <- raw_data %>%
+  dplyr::select(respid, spring, datetime_ema, emanum0, 
+                frconfl, intstress, intannoy, intprob, 
+                frsupp, intaccept, intfit, intenjoy, inttrueslf, intunderstd,
+                dmwell)
+
+summary(x_df)
+
+x_mean <- x_df %>%
+  mutate(spring = as.factor(spring)) %>%
+  group_by(respid, spring) %>%
+  summarise(m_con = mean(frconfl, na.rm = T), m_str = mean(intstress, na.rm = T), m_ann = mean(intannoy, na.rm = T), 
+            m_prob = mean(intprob, na.rm = T), m_sup = mean(frsupp, na.rm = T), m_acc = mean(intaccept, na.rm = T), 
+            m_fit = mean(intfit, na.rm = T), m_enj = mean(intenjoy, na.rm = T), m_tru = mean(inttrueslf, na.rm = T), 
+            m_und = mean(intunderstd, na.rm = T), m_wel = mean(dmwell, na.rm = T))
+
+x_dens_plot <- function(var){
+  ggplot(x_mean) +
+  geom_density(aes_string(x = var, col = "spring")) +
+  scale_colour_manual(values =c('0'='black','1'='red'), labels = c('Fall','Spring')) +
+  labs(x = var, y = "Density of Respondents", col = "Season")
+}
+
+for (i in colnames(x_mean)[3:ncol(x_mean)]){
+  print(x_dens_plot(i))
+}
+```
+
+## Bivariate
+
+```{r}
+
+```
 
 # CGM Analytic Packages
 
