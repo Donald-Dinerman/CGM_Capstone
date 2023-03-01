@@ -155,6 +155,7 @@ ggplot(resp_freq_szn) +
 ```
 
 ```{r}
+# Graphs and Descriptive Statistics
 # CGM for male/female
 # Number of woman/men
 ```
