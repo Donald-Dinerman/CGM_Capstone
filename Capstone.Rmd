@@ -207,6 +207,11 @@ ggplot(resp_freq_szn) +
 ```
 
 ```{r}
+# Investigate EDA of Time above range with threshold 180 and 250
+```
+
+
+```{r}
 # Number of woman/men/nb
 ## Fall
 # Change gender to factor
@@ -327,6 +332,21 @@ for (i in colnames(x_mean)[3:ncol(x_mean)]){
 ```{r}
 
 ```
+
+
+# Modeling
+
+```{r}
+# Try GAM model with seasonal level data
+```
+
+
+
+
+
+
+
+
 
 
 
