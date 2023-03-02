@@ -12,6 +12,53 @@ output:
 knitr::opts_chunk$set(echo = T, warning = T, message = F)
 ```
 
+# Research
+
+```{r}
+# https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5826763/#:~:text=Highlights,hour%20plasma%20glucose%20than%20men.&text=prevalent%20in%20women-,Type%201%20diabetes%20is%20the%20only%20common%20autoimmune%20disease%20not,incidence%20in%20boys%20after%20puberty.
+
+# Highlights
+
+# In response to an oral glucose tolerance test, women have lower fasting plasma glucose and higher 2-hour plasma glucose than men.
+
+# Impaired fasting glucose is more prevalent in men while impaired glucose tolerance is more prevalent in women
+
+# Type 1 diabetes is the only common autoimmune disease not characterized by a female predominance and exhibits an increased incidence in boys after puberty.
+```
+
+
+```{r}
+#https://pubmed.ncbi.nlm.nih.gov/20182862/
+
+# Abstract
+
+# Aims/hypothesis: We aimed to examine whether sex differences in fasting plasma glucose (FPG), 2 h post-OGTT plasma glucose (2hPG) and HbA(1c) could be explained by differences in body size and/or body composition between men and women in a general non-diabetic Danish population. Moreover, we aimed to study to what degree the newly suggested high-risk HbA(1c) criteria overlapped with the current OGTT-based criteria of glucose intolerance.
+
+
+# Methods: We used cross-sectional data from 6,006 non-diabetic men and women. HbA(1c) and FPG levels were measured and a 75 g OGTT was performed in all individuals. Height, weight and waist and hip circumferences were measured and BMI was calculated. Data were analysed in age-adjusted linear regression models.
+
+
+# Results: Men had higher FPG and HbA(1c) levels than women, and women had higher 2hPG levels than men. Sex differences in 2hPG levels were explained by differences in height and FPG levels, but sex differences in FPG or HbA(1c) levels were not explained by anthropometric measures. Among individuals with HbA(1c) in the high-risk range (6.0-6.5%), 73% had normal glucose tolerance.
+
+
+# Conclusions/interpretation: Sex differences in 2hPG levels after an OGTT may to some extent be a consequence of giving the same amount of glucose to individuals with different body size. In contrast, sex differences in FPG and HbA(1c) levels are likely to have a true physiological basis. In clinical practice, the HbA(1c) assay may be more convenient than the OGTT, but it is important to note that different populations are identified by the two methods.
+```
+
+# CGM Analytic Packages
+
+```{r}
+# https://github.com/RyanJ-Shao/CGMTSA
+# Continuous Glucose Monitoring Time Series Data Analysis (CGMTSA) User Guide
+# The R package Continuous Glucose Monitoring Time Series Data Analysis (CGMTSA) was developed to facilitate investigations that examine the continuous glucose monitoring (CGM) data as a time series. Accordingly, novel time series functions were introduced to (1) enable more accurate missing data imputation and outlier identification; (2) calculate recommended CGM metrics as well as key time series parameters; (3) plot interactive and three-dimensional graphs that allow direct visualizations of temporal CGM data and time series model optimization.
+```
+
+```{r}
+# https://cran.r-project.org/web/packages/cgmanalysis/cgmanalysis.pdf
+# Package ‘cgmanalysis’
+# provides several different functions for cleaning and analyzing continuous glucose monitor data. 
+# Currently it works with 'Dexcom', 'iPro 2', 'Diasend', 'Libre', or 'Carelink' data. 
+```
+
 # Data Intro
 ```{r}
 library(tidyverse)
@@ -281,18 +328,5 @@ for (i in colnames(x_mean)[3:ncol(x_mean)]){
 
 ```
 
-# CGM Analytic Packages
 
-```{r}
-# https://github.com/RyanJ-Shao/CGMTSA
-# Continuous Glucose Monitoring Time Series Data Analysis (CGMTSA) User Guide
-# The R package Continuous Glucose Monitoring Time Series Data Analysis (CGMTSA) was developed to facilitate investigations that examine the continuous glucose monitoring (CGM) data as a time series. Accordingly, novel time series functions were introduced to (1) enable more accurate missing data imputation and outlier identification; (2) calculate recommended CGM metrics as well as key time series parameters; (3) plot interactive and three-dimensional graphs that allow direct visualizations of temporal CGM data and time series model optimization.
-```
-
-```{r}
-# https://cran.r-project.org/web/packages/cgmanalysis/cgmanalysis.pdf
-# Package ‘cgmanalysis’
-# provides several different functions for cleaning and analyzing continuous glucose monitor data. 
-# Currently it works with 'Dexcom', 'iPro 2', 'Diasend', 'Libre', or 'Carelink' data. 
-```
 
