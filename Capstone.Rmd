@@ -97,6 +97,7 @@ library(ggtext)
 # EDA
 
 ## Univariate
+
 ### Response
 ```{r}
 resp_df <- raw_data %>%
@@ -206,10 +207,6 @@ ggplot(resp_freq_szn) +
   labs(x = "Data Entry Frequency", y = "Density of Respondents", col = "Season")
 ```
 
-```{r}
-# Investigate EDA of Time above range with threshold 180 and 250
-```
-
 
 ```{r}
 # Number of woman/men/nb
@@ -289,6 +286,26 @@ resp_gen_df %>%
   labs(x = "Average Seasonal Blood Glucose (mg/dL)", y = "Density of Respondents", col = "Gender")
 ```
 
+```{r}
+# Investigate EDA of Time above range with threshold 180 and 250
+resp_gen_df %>%
+  group_by(respid, spring, gender) %>%
+  summarise(bg_s_avg = mean(TIR_s))  %>%
+  filter(gender != "Non Binary") %>%
+  ggplot() +
+  geom_density(aes(x = bg_s_avg, col = gender)) +
+  facet_grid(~spring) +
+  labs(x = "Time Above Range Proportion", y = "Density of Respondents", col = "Season")
+
+resp_gen_df %>%
+  group_by(respid, spring, gender) %>%
+  summarise(bg_s_avg = mean(TIR_s))  %>%
+  filter(gender != "Non Binary") %>%
+  ggplot() +
+  geom_boxplot(aes(x = bg_s_avg, y = gender)) +
+  facet_grid(~spring) +
+  labs(x = "Time Above Range Proportion", y = "Gender")
+```
 
 ### Predictors
 
@@ -330,14 +347,65 @@ for (i in colnames(x_mean)[3:ncol(x_mean)]){
 ## Bivariate
 
 ```{r}
+mod_df <- raw_data %>%
+  dplyr::select(respid, spring, tbh1female, datetime_ema, emanum0, 
+                frconfl, intstress, intannoy, intprob, 
+                frsupp, intaccept, intfit, intenjoy, inttrueslf, intunderstd,
+                dmwell,
+                TAR_s) %>%
+  mutate(
+    gender = case_when(
+      tbh1female == 0 ~ "Male",
+      tbh1female == 1 ~ "Female",
+      tbh1female == 2 ~ "Non Binary"),
+    spring = ifelse(spring==0, "Fall", "Spring"), 
+                    .keep = "unused")
 
+mod_sum_df <- mod_df %>%
+  group_by(respid, spring, gender) %>%
+  summarise(m_con = mean(frconfl, na.rm = T), m_str = mean(intstress, na.rm = T), m_ann = mean(intannoy, na.rm = T), 
+            m_prob = mean(intprob, na.rm = T), m_sup = mean(frsupp, na.rm = T), m_acc = mean(intaccept, na.rm = T), 
+            m_fit = mean(intfit, na.rm = T), m_enj = mean(intenjoy, na.rm = T), m_tru = mean(inttrueslf, na.rm = T), 
+            m_und = mean(intunderstd, na.rm = T), m_wel = mean(dmwell, na.rm = T),
+            m_TAR_s = mean(TAR_s, na.rm = T))
+
+```
+
+```{r}
+scatter_plot <- function(var){
+  ggplot(mod_sum_df, aes_string(x = var, y = "m_TAR_s")) +
+  geom_point(alpha = 0.2) +
+  geom_smooth(se=F) + # loess
+  labs(x = var, y = "Time in Range (Seasonal)")
+}
+
+for (i in colnames(mod_sum_df)[4:ncol(mod_sum_df)-1]){
+  print(scatter_plot(i))
+}
 ```
 
 
 # Modeling
 
 ```{r}
+library(mgcv)
+```
+
+```{r}
 # Try GAM model with seasonal level data
+# Response: TAR seasonal
+# Predictors: ref to predictor list
+
+#Note: The F statistic explains predictors impact on output response
+
+gam_model <- gam(m_TAR_s ~ s(m_con) + s(m_str) + s(m_ann) + s(m_prob) + s(m_sup) + s(m_acc) + s(m_fit) +
+                   s(m_enj) + s(m_tru) + s(m_und) + s(m_wel) + as.factor(gender),
+                 data = mod_sum_df,
+                 method = "REML")
+
+summary(gam_model) # Investigate relationships with scatterplots
+
+plot(gam_model)
 ```
 
 
