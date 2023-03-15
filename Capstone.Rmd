@@ -246,27 +246,22 @@ resp_gen_df %>%
 ```{r}
 # Graphs and Descriptive Statistics
 # CGM for male/female
-# These give different values because in the latter we weight individuals with more obs and in the former everyone has equal weights
-# How to get proper sd
+# Calculate like this to give ind. equal weights
+
 resp_gen_df %>%
   group_by(respid, gender) %>%
   summarise(bg_s_avg = mean(bg_mean_s),
             bg_s_median = median(bg_mean_s)) %>%
   ungroup() %>%
   group_by(gender) %>%
-  summarise(bg_s_avg_1 = mean(bg_s_avg),
-            bg_s_sd = sd(bg_s_avg, na.rm = T), # average of indivdual sd
-            bg_s_median = mean(bg_s_median)) %>% # average of indivdual median
-  kbl(caption = "CGM Statistics by Gender") %>%
-  kable_styling()
-
-resp_gen_df %>%
-  group_by(gender) %>%
-  summarise(bg_s_avg = mean(bg_mean_s),
-            bg_s_sd = sd(bg_mean_s, na.rm = T),
-            bg_s_median = median(bg_mean_s)) %>%
-  kbl(caption = "CGM Statistics by Gender") %>%
-  kable_styling()
+  summarise('Mean' = mean(bg_s_avg),
+            'Std Dev' = sd(bg_s_avg, na.rm = T), # average of indivdual sd
+            'Median' = mean(bg_s_median)) %>% # average of indivdual median
+  mutate_if(is.numeric, round, digits = 2) %>%
+  filter(gender != "Non Binary") %>%
+  rename(., Gender = gender) %>%
+  kbl(caption = "Seasonal Blood Glucose by Gender") %>%
+  kable_styling(full_width = F)
 ```
 
 ```{r}
@@ -346,11 +341,13 @@ for (i in colnames(x_mean)[3:ncol(x_mean)]){
 ## Bivariate
 
 ```{r}
+#zanxiety, zhappiness, zdepr, zatease
+
 mod_df <- raw_data %>%
   dplyr::select(respid, spring, tbh1female, datetime_ema, emanum0, 
-                frconfl, intstress, intannoy, intprob, 
+                frconfl, intstress, intannoy, intprob, dmwell,
                 frsupp, intaccept, intfit, intenjoy, inttrueslf, intunderstd,
-                dmwell,
+                anxiety, happiness, depr, atease,
                 TAR_s) %>%
   mutate(
     gender = case_when(
@@ -365,7 +362,8 @@ mod_sum_df <- mod_df %>%
   summarise(m_con = mean(frconfl, na.rm = T), m_str = mean(intstress, na.rm = T), m_ann = mean(intannoy, na.rm = T), 
             m_prob = mean(intprob, na.rm = T), m_sup = mean(frsupp, na.rm = T), m_acc = mean(intaccept, na.rm = T), 
             m_fit = mean(intfit, na.rm = T), m_enj = mean(intenjoy, na.rm = T), m_tru = mean(inttrueslf, na.rm = T), 
-            m_und = mean(intunderstd, na.rm = T), m_wel = mean(dmwell, na.rm = T),
+            m_und = mean(intunderstd, na.rm = T), m_wel = mean(dmwell, na.rm = T), m_anx = mean(anxiety, na.rm = T),
+            m_hap = mean(happiness, na.rm = T), m_dep = mean(depr, na.rm = T), m_eas = mean(atease, na.rm = T),
             m_TAR_s = mean(TAR_s, na.rm = T))
 ```
 
@@ -376,18 +374,21 @@ mod_sum_df %>%
   summarise(m_con = mean(m_con, na.rm = T), m_str = mean(m_str, na.rm = T), m_ann = mean(m_ann, na.rm = T), 
             m_prob = mean(m_prob, na.rm = T), m_sup = mean(m_sup, na.rm = T), m_acc = mean(m_acc, na.rm = T), 
             m_fit = mean(m_fit, na.rm = T), m_enj = mean(m_enj, na.rm = T), m_tru = mean(m_tru, na.rm = T), 
-            m_und = mean(m_und, na.rm = T), m_wel = mean(m_wel, na.rm = T),
+            m_und = mean(m_und, na.rm = T), m_wel = mean(m_wel, na.rm = T), m_anx = mean(m_anx, na.rm = T),
+            m_hap = mean(m_hap, na.rm = T), m_dep = mean(m_dep, na.rm = T), m_eas = mean(m_eas, na.rm = T),
             m_TAR_s = mean(m_TAR_s, na.rm = T))
 ```
 
 ```{r}
 # Distribution of emotion variables by gender
 gen_mood_df <- mod_df %>%
+  filter(gender != "Non Binary") %>%
   group_by(respid, gender) %>%
   summarise(m_con = mean(frconfl, na.rm = T), m_str = mean(intstress, na.rm = T), m_ann = mean(intannoy, na.rm = T), 
             m_prob = mean(intprob, na.rm = T), m_sup = mean(frsupp, na.rm = T), m_acc = mean(intaccept, na.rm = T), 
             m_fit = mean(intfit, na.rm = T), m_enj = mean(intenjoy, na.rm = T), m_tru = mean(inttrueslf, na.rm = T), 
-            m_und = mean(intunderstd, na.rm = T), m_wel = mean(dmwell, na.rm = T))
+            m_und = mean(intunderstd, na.rm = T), m_wel = mean(dmwell, na.rm = T), m_anx = mean(anxiety, na.rm = T),
+            m_hap = mean(happiness, na.rm = T), m_dep = mean(depr, na.rm = T), m_eas = mean(atease, na.rm = T))
 
 gen_mood_plot <- function(var){
   ggplot(gen_mood_df) +
@@ -396,8 +397,38 @@ gen_mood_plot <- function(var){
 }
 
 for (i in colnames(gen_mood_df)[3:ncol(gen_mood_df)]){
-  print(x_dens_plot(i))
+  print(gen_mood_plot(i))
 }
+```
+
+```{r}
+t_test_res <- lapply(gen_mood_df[-c(1,2)], function(x) t.test(x ~ gen_mood_df$gender))
+#t_test_res
+```
+
+```{r, warning=F}
+# sig diff var: m_acc, m_wel, m_hap, m_eas
+p1_gen <- ggplot(gen_mood_df) +
+  geom_density(aes_string(x = "m_acc", col = "gender"), show.legend = F) +
+  labs(x = "Acceptance Rating", y = "Density of Respondents", col = "Gender") +
+  theme_bw()
+
+p2_gen <- ggplot(gen_mood_df) +
+  geom_density(aes_string(x = "m_wel", col = "gender")) +
+  labs(x = "Self Care Rating", y = "Density of Respondents", col = "Gender") +
+  theme_bw()
+
+p3_gen <- ggplot(gen_mood_df) +
+  geom_density(aes_string(x = "m_hap", col = "gender"), show.legend = F) +
+  labs(x = "Happiness Rating", y = "Density of Respondents", col = "Gender") +
+  theme_bw()
+
+p4_gen <- ggplot(gen_mood_df) +
+  geom_density(aes_string(x = "m_eas", col = "gender"), show.legend = F) +
+  labs(x = "At Ease Rating", y = "Density of Respondents", col = "Gender") +
+  theme_bw()
+
+plot_grid(p1_gen, p2_gen, p3_gen, p4_gen)
 ```
 
 
@@ -412,6 +443,16 @@ scatter_plot <- function(var){
 for (i in colnames(mod_sum_df)[4:ncol(mod_sum_df)-1]){
   print(scatter_plot(i))
 }
+```
+
+```{r}
+#Significant scatterplot for client prez
+ggplot(mod_sum_df, aes_string(x = "m_wel", y = "m_TAR_s")) +
+  geom_point(alpha = 0.2) +
+  geom_smooth(se=F) + # loess
+  labs(x = "Average Self Care Rating", y = "Time Above Range (Seasonal)", 
+       title = "Better Self Care is Related with Less Time Above Range") +
+  theme_bw()
 ```
 
 
@@ -429,12 +470,13 @@ library(mgcv)
 #Note: The F statistic explains predictors impact on output response
 
 gam_model <- gam(m_TAR_s ~ s(m_con) + s(m_str) + s(m_ann) + s(m_prob) + s(m_sup) + s(m_acc) + s(m_fit) +
-                   s(m_enj) + s(m_tru) + s(m_und) + s(m_wel) + as.factor(gender),
+                   s(m_enj) + s(m_tru) + s(m_und) + s(m_wel) + s(m_anx) + s(m_hap) + s(m_dep) + s(m_eas) + as.factor(gender),
                  data = mod_sum_df,
                  method = "REML")
 
 summary(gam_model) # Investigate relationships with scatterplots
 
+par(mfrow = c(3,3))
 plot(gam_model)
 ```
 
@@ -443,18 +485,20 @@ plot(gam_model)
 # Mixed Model
 # Multilevel model
 # Random Intercept at individual level
+# Random slopes for moods at gender
 
 library(lme4)
-mixed_model <- lmer(m_TAR_s ~ m_con + m_str + m_ann + m_prob + m_sup + m_acc + m_fit + 
-                      m_enj + m_tru + m_und + m_wel + as.factor(gender) + (1 | respid),
+mixed_model <- lmer(m_TAR_s ~ m_con + m_str + m_ann + m_prob + m_sup + m_acc + m_fit + m_enj + m_tru + 
+                      m_und + m_wel + as.factor(gender) + m_eas + m_dep + m_hap + m_anx + (1 | respid),
                     data = mod_sum_df)
 
 summary(mixed_model)
 ```
 
 ```{r}
+# Granular Modeling with lag variable of response
 # For time series modeling include lagged version of response as covariate
-# Also include the emotion variables and gender as covariate
+# Also include the emotion/mood variables and gender as covariate
 ```
 
 
