@@ -80,6 +80,18 @@ unique(raw_data$respid) %>% length() # n Respondents (88)
 ```
 
 ```{r}
+library(lubridate)
+
+# Week number (1...7)
+raw_data$datetime_ema %>%
+  sub("T.*", "", .) %>%
+  wday() %>%
+  unique() %>%
+  sort()
+```
+
+
+```{r}
 library(cowplot)
 library(ggrepel)
 library(ggtext)
@@ -501,10 +513,45 @@ summary(mixed_model)
 # Also include the emotion/mood variables and gender as covariate
 ```
 
+```{r}
+# Linear Mixed Model
+# Residual analysis to check model assumptions
+  # Correlated errors when using lag (AR(1) autocorrelated errors)
+# mood and social interaction variables as a fixed effect
+# make time 1...8 (linear effect of time)
+# 1. No lag
+# 2. With lag, compare models' n
+# 3. Impute missing values of y (so the lag model has higher n), (can average using linear interpretation)
+  # If we have 1 and 4, 2 and 3 missing, draw line between 1 and 4 and map the corresponding y values for 2 and 3
+  # later can look into multiple imputation (MICE package in R)
+```
 
 
+Model Specifications
 
+$$
+\begin{aligned}
 
+y_{itds} =& \; \alpha_{i} + \beta^{time}x^{time}_{t} + \beta^{week} x^{week}_{d} + \beta^{season} x^{season}_{s} + \beta^{gender}x^{gender}_{itds} + 
+\beta^{mood} x^{mood}_{itds} +
 
+\\ &
+
+\beta^{emotions} x^{emotions}_{itds} + \beta^{self care}x^{self care}_{itds} + \beta^{eat}x^{eat}_{itds} + \beta^{exercise}x^{exercise}_{itds} + \epsilon_{itds}
+
+\end{aligned}
+$$
+
+$$
+\begin{aligned}
+
+y_{itds} =& \; \alpha_{i} + \beta^{lag} y_{i(t-1)ds} + \beta^{time}x^{time}_{t} + \beta^{week} x^{week}_{d} + \beta^{season} x^{season}_{s} + \beta^{gender}x^{gender}_{itds} +  \beta^{mood} x^{mood}_{itds} +
+
+\\ &
+
+\beta^{emotions} x^{emotions}_{itds} + \beta^{self care}x^{self care}_{itds} + \beta^{eat}x^{eat}_{itds} + \beta^{exercise}x^{exercise}_{itds} + \epsilon_{itds}
+
+\end{aligned}
+$$
 
 
