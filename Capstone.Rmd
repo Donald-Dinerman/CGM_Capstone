@@ -505,6 +505,8 @@ mixed_model <- lmer(m_TAR_s ~ m_con + m_str + m_ann + m_prob + m_sup + m_acc + m
                     data = mod_sum_df)
 
 summary(mixed_model)
+# Depression, happiness, anxiety, at ease
+# supp and con are funcitions of other var, shouldn't be included
 ```
 
 ```{r}
