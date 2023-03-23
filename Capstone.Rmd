@@ -415,7 +415,7 @@ for (i in colnames(gen_mood_df)[3:ncol(gen_mood_df)]){
 
 ```{r}
 t_test_res <- lapply(gen_mood_df[-c(1,2)], function(x) t.test(x ~ gen_mood_df$gender))
-#t_test_res
+t_test_res
 ```
 
 ```{r, warning=F}
@@ -505,7 +505,6 @@ mixed_model <- lmer(m_TAR_s ~ m_con + m_str + m_ann + m_prob + m_sup + m_acc + m
                     data = mod_sum_df)
 
 summary(mixed_model)
-# Depression, happiness, anxiety, at ease
 # supp and con are funcitions of other var, shouldn't be included
 ```
 
@@ -534,7 +533,7 @@ Model Specifications
 $$
 \begin{aligned}
 
-y_{itds} =& \; \alpha_{i} + \beta^{time}x^{time}_{t} + \beta^{week} x^{week}_{d} + \beta^{season} x^{season}_{s} + \beta^{gender}x^{gender}_{itds} + 
+y_{itds} =& \; \alpha_{i} + \beta^{time}x^{time}_{t} + \beta^{week} x^{week}_{d} + \beta^{season} x^{season}_{s} + \beta^{gender}x^{gender}_{i} + 
 \beta^{mood} x^{mood}_{itds} +
 
 \\ &
@@ -547,7 +546,7 @@ $$
 $$
 \begin{aligned}
 
-y_{itds} =& \; \alpha_{i} + \beta^{lag} y_{i(t-1)ds} + \beta^{time}x^{time}_{t} + \beta^{week} x^{week}_{d} + \beta^{season} x^{season}_{s} + \beta^{gender}x^{gender}_{itds} +  \beta^{mood} x^{mood}_{itds} +
+y_{itds} =& \; \alpha_{i} + \beta^{lag} y_{i(t-1)ds} + \beta^{time}x^{time}_{t} + \beta^{week} x^{week}_{d} + \beta^{season} x^{season}_{s} + \beta^{gender}x^{gender}_{i} +  \beta^{mood} x^{mood}_{itds} +
 
 \\ &
 
