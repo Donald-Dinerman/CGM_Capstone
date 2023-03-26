@@ -426,13 +426,13 @@ p1_gen <- ggplot(gen_mood_df) +
   theme_bw()
 
 p2_gen <- ggplot(gen_mood_df) +
-  geom_density(aes_string(x = "m_wel", col = "gender")) +
+  geom_density(aes_string(x = "m_wel", col = "gender"), show.legend = F) +
   labs(x = "Self Care Rating", y = "Density of Respondents", col = "Gender") +
   theme_bw()
 
 p3_gen <- ggplot(gen_mood_df) +
-  geom_density(aes_string(x = "m_hap", col = "gender"), show.legend = F) +
-  labs(x = "Happiness Rating", y = "Density of Respondents", col = "Gender") +
+  geom_density(aes_string(x = "m_hap", col = "gender"), show.legend = T) +
+  labs(x = "Happiness Rating", y = "", col = "Gender") +
   theme_bw()
 
 p4_gen <- ggplot(gen_mood_df) +
@@ -440,7 +440,7 @@ p4_gen <- ggplot(gen_mood_df) +
   labs(x = "At Ease Rating", y = "Density of Respondents", col = "Gender") +
   theme_bw()
 
-plot_grid(p1_gen, p2_gen, p3_gen, p4_gen)
+plot_grid(p2_gen, p3_gen, p4_gen)
 ```
 
 
@@ -470,6 +470,7 @@ ggplot(mod_sum_df, aes_string(x = "m_wel", y = "m_TAR_s")) +
 
 # Modeling
 
+## Aggregated
 ```{r}
 library(mgcv)
 ```
@@ -481,9 +482,10 @@ library(mgcv)
 
 #Note: The F statistic explains predictors impact on output response
 
-gam_model <- gam(m_TAR_s ~ s(m_con) + s(m_str) + s(m_ann) + s(m_prob) + s(m_sup) + s(m_acc) + s(m_fit) +
-                   s(m_enj) + s(m_tru) + s(m_und) + s(m_wel) + s(m_anx) + s(m_hap) + s(m_dep) + s(m_eas) + as.factor(gender),
-                 data = mod_sum_df,
+mod_sum_df_f <- filter(mod_sum_df, gender != "Non Binary")
+
+gam_model <- gam(m_TAR_s ~ s(m_con) + s(m_sup) + s(m_wel) + s(m_anx) + s(m_hap) + s(m_dep) + s(m_eas) + as.factor(gender),
+                 data = mod_sum_df_f,
                  method = "REML")
 
 summary(gam_model) # Investigate relationships with scatterplots
@@ -500,12 +502,11 @@ plot(gam_model)
 # Random slopes for moods at gender
 
 library(lme4)
-mixed_model <- lmer(m_TAR_s ~ m_con + m_str + m_ann + m_prob + m_sup + m_acc + m_fit + m_enj + m_tru + 
-                      m_und + m_wel + as.factor(gender) + m_eas + m_dep + m_hap + m_anx + (1 | respid),
-                    data = mod_sum_df)
+mixed_model <- lmer(m_TAR_s ~ m_con + m_sup + m_wel + as.factor(gender) + m_eas + m_dep + m_hap + m_anx + (1 | respid),
+                    data = mod_sum_df_f)
 
 summary(mixed_model)
-# supp and con are funcitions of other var, shouldn't be included
+# supp and con are funcitions of other var, client wants these
 ```
 
 ```{r}
@@ -527,6 +528,7 @@ summary(mixed_model)
   # later can look into multiple imputation (MICE package in R)
 ```
 
+## Granular
 
 Model Specifications
 
@@ -534,11 +536,11 @@ $$
 \begin{aligned}
 
 y_{itds} =& \; \alpha_{i} + \beta^{time}x^{time}_{t} + \beta^{week} x^{week}_{d} + \beta^{season} x^{season}_{s} + \beta^{gender}x^{gender}_{i} + 
-\beta^{mood} x^{mood}_{itds} +
+\beta^{mood} x^{mood}_{itds} + \beta^{positive \:emotions} x^{positive \:emotions}_{itds} +
 
 \\ &
 
-\beta^{emotions} x^{emotions}_{itds} + \beta^{self care}x^{self care}_{itds} + \beta^{eat}x^{eat}_{itds} + \beta^{exercise}x^{exercise}_{itds} + \epsilon_{itds}
+\beta^{negative \:emotions} x^{negative \:emotions}_{itds} + \beta^{self care}x^{self care}_{itds} + \beta^{eat}x^{eat}_{itds} + \beta^{exercise}x^{exercise}_{itds} + \epsilon_{itds}
 
 \end{aligned}
 $$
@@ -546,13 +548,117 @@ $$
 $$
 \begin{aligned}
 
-y_{itds} =& \; \alpha_{i} + \beta^{lag} y_{i(t-1)ds} + \beta^{time}x^{time}_{t} + \beta^{week} x^{week}_{d} + \beta^{season} x^{season}_{s} + \beta^{gender}x^{gender}_{i} +  \beta^{mood} x^{mood}_{itds} +
+y_{itds} =& \; \alpha_{i} + \beta^{time}x^{time}_{t} + \beta^{week} x^{week}_{d} + \beta^{season} x^{season}_{s} + \beta^{gender}x^{gender}_{i} + 
+\beta^{mood} x^{mood}_{itds} + \beta^{positive \:emotions} x^{positive \:emotions}_{itds} +
 
 \\ &
 
-\beta^{emotions} x^{emotions}_{itds} + \beta^{self care}x^{self care}_{itds} + \beta^{eat}x^{eat}_{itds} + \beta^{exercise}x^{exercise}_{itds} + \epsilon_{itds}
+\beta^{negative \:emotions} x^{negative \:emotions}_{itds} + \beta^{self care}x^{self care}_{itds} + \beta^{eat}x^{eat}_{itds} + \beta^{exercise}x^{exercise}_{itds} + \epsilon_{itds}
 
 \end{aligned}
 $$
+
+
+$$
+\begin{aligned}
+
+y_{itds} =& \; \alpha_{i} + \beta^{lag} y_{i(t-1)ds} + \beta^{time}x^{time}_{t} + \beta^{week} x^{week}_{d} + \beta^{season} x^{season}_{s} + \beta^{gender}x^{gender}_{i} +  \beta^{mood} x^{mood}_{itds} +  \beta^{positive \:emotions} x^{positive \:emotions}_{itds} +
+
+\\ &
+
+\beta^{negative \:emotions} x^{negative \:emotions}_{itds} + \beta^{self care}x^{self care}_{itds} + \beta^{eat}x^{eat}_{itds} + \beta^{exercise}x^{exercise}_{itds} + \epsilon_{itds}
+
+\end{aligned}
+$$
+
+```{r}
+# Identify weekday/end
+weekday_func <- function(x){
+  num <- x %>% sub("T.*", "", .) %>% wday()
+  ans <- ifelse(num < 6, "Weekday", "Weekend")
+  return(ans)
+}
+
+# m_TAR_s ~ m_con + m_sup + m_wel + as.factor(gender) + m_eas + m_dep + m_hap + m_anx + (1 | respid)
+gran_df <- raw_data %>%
+  dplyr::select(TAR_bin_1h, respid, emanum0, spring, tbh1female, datetime_ema, 
+                frconfl, frsupp, 
+                dmwell, anxiety, happiness, depr, atease, eat, exer
+                ) %>%
+  mutate(
+    respid = as.factor(respid),
+    emanum0 = emanum0 + 1, # So it starts at 1 rather than 0 (Treat as numeric?)
+    week = weekday_func(datetime_ema),
+    spring = ifelse(spring==0, "Fall", "Spring"),
+    gender = case_when(
+      tbh1female == 0 ~ "Male",
+      tbh1female == 1 ~ "Female",
+      tbh1female == 2 ~ "Non Binary"),
+    .keep = "unused", .after = TAR_bin_1h) %>%
+  filter(gender != "Non Binary")
+
+
+# Missing Values
+gran_df %>%
+  select(everything()) %>%  # replace to your needs
+  summarise_all(funs(sum(is.na(.))))
+```
+
+```{r}
+# Drop all NA
+# Do I use glmer to have categorical response (family = binomial)
+# If so I get following warning:
+  # Model failed to converge with max|grad| = 0.00776465 (tol = 0.002, component 1)
+gran_mod <- lmer(TAR_bin_1h ~ (1 | respid) + emanum0 + week + spring + gender + frconfl + frsupp + dmwell + anxiety + happiness + depr + atease + eat + exer,
+                    data = drop_na(gran_df))
+
+summary(gran_mod)
+```
+
+```{r}
+# With TAR_bin_1h (y) Imputation
+library("mice")
+
+impute_list <- make.blocks(c("TAR_bin_1h"))
+
+# Make y categorical
+gran_df$TAR_bin_1h <- as.factor(gran_df$TAR_bin_1h)
+
+imputed_Data <- mice(gran_df, m=1, maxit = 50, method = 'logreg', seed = 500, blocks = impute_list)
+summary(imputed_Data)
+
+#get complete data (1st out of 5)
+completeData <- complete(imputed_Data,1)
+
+# Change back to numeric
+completeData$TAR_bin_1h <- as.numeric(completeData$TAR_bin_1h)
+y_imp_mod <- lmer(TAR_bin_1h ~ (1 | respid) + emanum0 + week + spring + gender + frconfl + frsupp + dmwell + anxiety + happiness + depr + atease + eat + exer,
+                    data = completeData)
+
+summary(y_imp_mod)
+
+# This is for when I have more time to run the imputation and can pool the parameters (Takes so long)
+# build predictive model
+fit <- with(data = gran_df, 
+            exp = lmer(TAR_bin_1h ~ (1 | respid) + emanum0 + week + spring + gender + frconfl + frsupp + 
+                         dmwell + anxiety + happiness + depr + atease + eat + exer))
+
+# combine results of all 5 models
+combine <- pool(fit)
+summary(combine)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
