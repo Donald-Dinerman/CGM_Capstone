@@ -63,6 +63,13 @@ knitr::opts_chunk$set(echo = T, warning = T, message = F)
 ```{r}
 library(tidyverse)
 library(kableExtra)
+library(lubridate)
+library(cowplot)
+library(mgcv)
+library(mice)
+library(broom.mixed) # tidy the lmer for pool()
+library(lme4)
+library(sjPlot)
 ```
 
 ```{r}
@@ -80,25 +87,12 @@ unique(raw_data$respid) %>% length() # n Respondents (88)
 ```
 
 ```{r}
-library(lubridate)
-
 # Week number (1...7)
 raw_data$datetime_ema %>%
   sub("T.*", "", .) %>%
   wday() %>%
   unique() %>%
   sort()
-```
-
-
-```{r}
-library(cowplot)
-library(ggrepel)
-library(ggtext)
-
-# library(showtext)
-# font_add_google("Lato")
-# showtext_auto()
 ```
 
 ```{r}
@@ -193,9 +187,9 @@ p_tir <- resp_df %>%
   scale_colour_manual(values =c('0'='black','1'='red'), labels = c('Fall','Spring')) +
   labs(x = "Proportion of Time in Range", y = "", col = "Season")
 
-plot_grid(p_spring, p_fall)
+cowplot::plot_grid(p_spring, p_fall)
 
-plot_grid(p_bg, p_tar, p_tbr, p_tir)
+cowplot::plot_grid(p_bg, p_tar, p_tbr, p_tir)
 ```
 
 ```{r}
@@ -440,7 +434,7 @@ p4_gen <- ggplot(gen_mood_df) +
   labs(x = "At Ease Rating", y = "Density of Respondents", col = "Gender") +
   theme_bw()
 
-plot_grid(p2_gen, p3_gen, p4_gen)
+cowplot::plot_grid(p2_gen, p3_gen, p4_gen)
 ```
 
 
@@ -471,9 +465,6 @@ ggplot(mod_sum_df, aes_string(x = "m_wel", y = "m_TAR_s")) +
 # Modeling
 
 ## Aggregated
-```{r}
-library(mgcv)
-```
 
 ```{r}
 # Try GAM model with seasonal level data
@@ -501,7 +492,6 @@ plot(gam_model)
 # Random Intercept at individual level
 # Random slopes for moods at gender
 
-library(lme4)
 mixed_model <- lmer(m_TAR_s ~ m_con + m_sup + m_wel + as.factor(gender) + m_eas + m_dep + m_hap + m_anx + (1 | respid),
                     data = mod_sum_df_f)
 
@@ -581,22 +571,21 @@ weekday_func <- function(x){
 
 # m_TAR_s ~ m_con + m_sup + m_wel + as.factor(gender) + m_eas + m_dep + m_hap + m_anx + (1 | respid)
 gran_df <- raw_data %>%
-  dplyr::select(TAR_bin_1h, respid, emanum0, spring, tbh1female, datetime_ema, 
-                frconfl, frsupp, 
-                dmwell, anxiety, happiness, depr, atease, eat, exer
+  dplyr::select(TAR_prop_1h, respid, emanum0, spring, tbh1female, datetime_ema, 
+                positive_emotion = frconfl, negative_emotion = frsupp, self_care = dmwell, 
+                anxiety, happiness, depression = depr, atease, eat, exercise = exer
                 ) %>%
   mutate(
     respid = as.factor(respid),
-    emanum0 = emanum0 + 1, # So it starts at 1 rather than 0 (Treat as numeric?)
+    time = emanum0 + 1, # So it starts at 1 rather than 0 (Treat as numeric?)
     week = weekday_func(datetime_ema),
     spring = ifelse(spring==0, "Fall", "Spring"),
     gender = case_when(
       tbh1female == 0 ~ "Male",
       tbh1female == 1 ~ "Female",
       tbh1female == 2 ~ "Non Binary"),
-    .keep = "unused", .after = TAR_bin_1h) %>%
+    .keep = "unused", .after = TAR_prop_1h) %>%
   filter(gender != "Non Binary")
-
 
 # Missing Values
 gran_df %>%
@@ -606,42 +595,43 @@ gran_df %>%
 
 ```{r}
 # Drop all NA
-# Do I use glmer to have categorical response (family = binomial)
-# If so I get following warning:
-  # Model failed to converge with max|grad| = 0.00776465 (tol = 0.002, component 1)
-gran_mod <- lmer(TAR_bin_1h ~ (1 | respid) + emanum0 + week + spring + gender + frconfl + frsupp + dmwell + anxiety + happiness + depr + atease + eat + exer,
+gran_mod <- lmer(TAR_prop_1h ~ (1 | respid) + time + week + spring + gender + positive_emotion + negative_emotion + 
+                   self_care + anxiety + happiness + depression + atease + eat + exercise,
                     data = drop_na(gran_df))
 
 summary(gran_mod)
 ```
 
 ```{r}
-# With TAR_bin_1h (y) Imputation
-library("mice")
+# Imputation: With TAR_prop_1h (y) 
 
-impute_list <- make.blocks(c("TAR_bin_1h"))
+# https://www.analyticsvidhya.com/blog/2016/03/tutorial-powerful-packages-imputing-missing-values/
+# Predictive Mean Matching: https://stefvanbuuren.name/fimd/sec-pmm.html
+# Pooling with MICE: https://www.gerkovink.com/miceVignettes/Convergence_pooling/Convergence_and_pooling.html
 
-# Make y categorical
-gran_df$TAR_bin_1h <- as.factor(gran_df$TAR_bin_1h)
+impute_list <- make.blocks(c("TAR_prop_1h"))
 
-imputed_Data <- mice(gran_df, m=1, maxit = 50, method = 'logreg', seed = 500, blocks = impute_list)
+imputed_Data <- mice(gran_df, m=5, maxit = 50, method = 'pmm', seed = 500, blocks = impute_list)
 summary(imputed_Data)
+```
 
+```{r}
+# Imputation Modeling
 #get complete data (1st out of 5)
 completeData <- complete(imputed_Data,1)
 
 # Change back to numeric
-completeData$TAR_bin_1h <- as.numeric(completeData$TAR_bin_1h)
-y_imp_mod <- lmer(TAR_bin_1h ~ (1 | respid) + emanum0 + week + spring + gender + frconfl + frsupp + dmwell + anxiety + happiness + depr + atease + eat + exer,
+y_imp_mod <- lmer(TAR_prop_1h ~ (1 | respid) + time + week + spring + gender + positive_emotion + negative_emotion + 
+                    self_care + anxiety + happiness + depression + atease + eat + exercise,
                     data = completeData)
 
 summary(y_imp_mod)
 
 # This is for when I have more time to run the imputation and can pool the parameters (Takes so long)
 # build predictive model
-fit <- with(data = gran_df, 
-            exp = lmer(TAR_bin_1h ~ (1 | respid) + emanum0 + week + spring + gender + frconfl + frsupp + 
-                         dmwell + anxiety + happiness + depr + atease + eat + exer))
+fit <- with(data = imputed_Data, 
+            exp = lmer(TAR_prop_1h ~ (1 | respid) + time + week + spring + gender + positive_emotion + negative_emotion + 
+                         self_care + anxiety + happiness + depression + atease + eat + exercise))
 
 # combine results of all 5 models
 combine <- pool(fit)
@@ -652,25 +642,25 @@ summary(combine)
 # Mixed model with lag
 # Caution: https://statisticalhorizons.com/lagged-dependent-variables/
 lagged_df <- completeData %>%
-  mutate(TAR_bin_1h = ifelse(TAR_bin_1h == 1, 0, 1),
-         TAR_1hr_lagged = lag(TAR_bin_1h, n = 1, default = NA), .before = week) %>%
+  mutate(TAR_1hr_lagged = lag(TAR_prop_1h, n = 1, default = NA), .before = week) %>%
   drop_na(TAR_1hr_lagged)
 
-lag_mod <- lmer(TAR_bin_1h ~ (1 | respid) + TAR_1hr_lagged + emanum0 + week + spring + gender + frconfl + frsupp + dmwell + anxiety +
-                  happiness + depr + atease + eat + exer,
+lag_mod <- lmer(TAR_prop_1h ~ (1 | respid) + TAR_1hr_lagged + time + week + spring + gender + positive_emotion + negative_emotion + 
+                  self_care + anxiety + happiness + depression + atease + eat + exercise,
                 data = lagged_df)
 
 summary(lag_mod)
 ```
 
 ```{r}
-# Levels matter for numeric if difference stays the same
-table(completeData$TAR_bin_1h)
-table(lagged_df$TAR_bin_1h)
-table(gran_df$TAR_bin_1h)
+# Before and After Imputation (Non-ts)
+tab_model(gran_mod, y_imp_mod, show.ci = F)
+
+# Imputed Y Models
+tab_model(y_imp_mod, lag_mod, show.ci = F)
 ```
 
-
+*Note: Final Model should likely be pooled result when using stochastic model-based imputation*
 
 
 
