@@ -648,7 +648,27 @@ combine <- pool(fit)
 summary(combine)
 ```
 
+```{r}
+# Mixed model with lag
+# Caution: https://statisticalhorizons.com/lagged-dependent-variables/
+lagged_df <- completeData %>%
+  mutate(TAR_bin_1h = ifelse(TAR_bin_1h == 1, 0, 1),
+         TAR_1hr_lagged = lag(TAR_bin_1h, n = 1, default = NA), .before = week) %>%
+  drop_na(TAR_1hr_lagged)
 
+lag_mod <- lmer(TAR_bin_1h ~ (1 | respid) + TAR_1hr_lagged + emanum0 + week + spring + gender + frconfl + frsupp + dmwell + anxiety +
+                  happiness + depr + atease + eat + exer,
+                data = lagged_df)
+
+summary(lag_mod)
+```
+
+```{r}
+# Levels matter for numeric if difference stays the same
+table(completeData$TAR_bin_1h)
+table(lagged_df$TAR_bin_1h)
+table(gran_df$TAR_bin_1h)
+```
 
 
 
