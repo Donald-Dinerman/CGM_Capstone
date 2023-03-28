@@ -561,8 +561,11 @@ y_{itds} =& \; \alpha_{i} + \beta^{lag} y_{i(t-1)ds} + \beta^{time}x^{time}_{t} 
 \end{aligned}
 $$
 
+### 1 Hour TAR
+
 ```{r}
 #Time/EMA
+# Change to time since 7 am (or other early time period)
 time_count <- c()
 time_count[1] <- 1
 for (i in 1:(nrow(raw_data)-1)) {
@@ -632,22 +635,32 @@ summary(imputed_Data)
 #get complete data (1st out of 5)
 completeData <- complete(imputed_Data,1)
 
-# Change back to numeric
-y_imp_mod <- lmer(TAR_prop_1h ~ (1 | respid) + time + week + spring + gender + positive_emotion + negative_emotion + 
+mod_1hr <- lmer(TAR_prop_1h ~ (1 | respid) + time + week + spring + gender + positive_emotion + negative_emotion + 
                     self_care + anxiety + happiness + depression + atease + eat + exercise,
                     data = completeData)
 
-summary(y_imp_mod)
+summary(mod_1hr)
 
 # This is for when I have more time to run the imputation and can pool the parameters (Takes so long)
 # build predictive model
-fit <- with(data = imputed_Data, 
+fit_1hr <- with(data = imputed_Data, 
             exp = lmer(TAR_prop_1h ~ (1 | respid) + time + week + spring + gender + positive_emotion + negative_emotion + 
                          self_care + anxiety + happiness + depression + atease + eat + exercise))
 
 # combine results of all 5 models
-combine <- pool(fit)
-summary(combine)
+combine_1hr <- pool(fit_1hr)
+summary(combine_1hr)
+
+# Residuals
+mod_1hr_r <- residuals(mod_1hr)
+par(mfrow=c(2,2))
+plot(mod_1hr_r)
+qqnorm(mod_1hr_r)
+qqline(mod_1hr_r)
+
+hist(mod_1hr_r)
+
+astsa::acf2(mod_1hr_r)
 ```
 
 ```{r}
@@ -657,24 +670,159 @@ lagged_df <- completeData %>%
   mutate(TAR_1hr_lagged = lag(TAR_prop_1h, n = 1, default = NA), .before = week) %>%
   drop_na(TAR_1hr_lagged)
 
-lag_mod <- lmer(TAR_prop_1h ~ (1 | respid) + TAR_1hr_lagged + time + week + spring + gender + positive_emotion + negative_emotion + 
+lag_1hr_mod <- lmer(TAR_prop_1h ~ (1 | respid) + TAR_1hr_lagged + time + week + spring + gender + positive_emotion + negative_emotion + 
                   self_care + anxiety + happiness + depression + atease + eat + exercise,
                 data = lagged_df)
 
-summary(lag_mod)
+summary(lag_1hr_mod)
+
+# Residuals
+lag_r <- residuals(lag_1hr_mod)
+par(mfrow=c(2,2))
+plot(lag_r)
+qqnorm(lag_r)
+qqline(lag_r)
+
+hist(lag_r)
+
+astsa::acf2(lag_r)
+```
+
+### 2 Hour TAR
+
+```{r}
+# Set Data
+gran_2hr_df <- raw_data %>%
+  dplyr::select(TAR_prop_2h, respid, spring, tbh1female, datetime_ema, 
+                negative_emotion = frconfl, positive_emotion = frsupp, self_care = dmwell, 
+                anxiety, happiness, depression = depr, atease, eat, exercise = exer
+                ) %>%
+  mutate(
+    respid = as.factor(respid),
+    time = time_count,
+    week = weekday_func(datetime_ema),
+    spring = ifelse(spring==0, "Fall", "Spring"),
+    gender = case_when(
+      tbh1female == 0 ~ "Male",
+      tbh1female == 1 ~ "Female",
+      tbh1female == 2 ~ "Non Binary"),
+    .keep = "unused", .after = TAR_prop_2h) %>%
+  filter(gender != "Non Binary")
+
+# Missing Values
+gran_2hr_df %>%
+  select(everything()) %>%  # replace to your needs
+  summarise_all(funs(sum(is.na(.))))
+
+# Imputation
+impute_list_2hr <- make.blocks(c("TAR_prop_2h"))
+
+imputed_Data_2hr <- mice(gran_2hr_df, m=5, maxit = 50, method = 'pmm', seed = 500, blocks = impute_list_2hr)
+
+completeData_2hr <- complete(imputed_Data_2hr,1)
+```
+
+```{r}
+# Imputation Modeling
+mod_2hr <- lmer(TAR_prop_2h ~ (1 | respid) + time + week + spring + gender + positive_emotion + negative_emotion + 
+                    self_care + anxiety + happiness + depression + atease + eat + exercise,
+                    data = completeData_2hr)
+
+summary(mod_2hr)
+
+# This is for when I have more time to run the imputation and can pool the parameters (Takes so long)
+# build predictive model
+fit_2hr <- with(data = imputed_Data_2hr, 
+            exp = lmer(TAR_prop_2h ~ (1 | respid) + time + week + spring + gender + positive_emotion + negative_emotion + 
+                         self_care + anxiety + happiness + depression + atease + eat + exercise))
+
+# combine results of all 5 models
+combine_2hr <- pool(fit_2hr)
+summary(combine_2hr)
+
+# Residuals
+mod_2hr_r <- residuals(mod_2hr)
+
+par(mfrow=c(2,2))
+plot(mod_2hr_r)
+qqnorm(mod_2hr_r)
+qqline(mod_2hr_r)
+
+hist(mod_2hr_r)
+
+astsa::acf2(mod_2hr_r)
+```
+
+```{r}
+# Mixed model with lag
+# Caution: https://statisticalhorizons.com/lagged-dependent-variables/
+lagged_2hr_df <- completeData_2hr %>%
+  mutate(TAR_2hr_lagged = lag(TAR_prop_2h, n = 1, default = NA), .before = week) %>%
+  drop_na(TAR_2hr_lagged)
+
+lag_2hr_mod <- lmer(TAR_prop_2h ~ (1 | respid) + TAR_2hr_lagged + time + week + spring + gender + positive_emotion + negative_emotion + 
+                  self_care + anxiety + happiness + depression + atease + eat + exercise,
+                data = lagged_2hr_df)
+
+summary(lag_2hr_mod)
+
+# Residuals
+lag_2hr_r <- residuals(lag_2hr_mod)
+par(mfrow=c(2,2))
+plot(lag_2hr_r)
+qqnorm(lag_2hr_r)
+qqline(lag_2hr_r)
+
+hist(lag_2hr_r)
+
+astsa::acf2(lag_2hr_r)
 ```
 
 ```{r}
 # Before and After Imputation (Non-ts)
-tab_model(gran_mod, y_imp_mod, show.ci = F)
+tab_model(gran_mod, mod_1hr, show.ci = F)
 
 # Imputed Y Models
-tab_model(y_imp_mod, lag_mod, show.ci = F)
+# TAR 1 hr (w/o lag, w lag)
+tab_model(mod_1hr, lag_1hr_mod, show.ci = F)
+
+# TAR 2 hr (w/o lag, w lag)
+tab_model(mod_2hr, lag_2hr_mod, show.ci = F)
+```
+
+```{r}
+# Show histograms for prez
+hist_1 <- ggplot(lagged_df) +
+  geom_histogram(aes(x = depression), col = "black", fill = "steelblue") +
+  theme_bw() +
+  labs(x = "Depression", y = "Count")
+
+hist_2 <- ggplot(lagged_df) +
+  geom_histogram(aes(x = anxiety), col = "black", fill = "steelblue") +
+  theme_bw() +
+  labs(x = "Anxiety", y = "")
+
+hist_3 <- ggplot(lagged_df) +
+  geom_histogram(aes(x = happiness), col = "black", fill = "steelblue") +
+  theme_bw() +
+  labs(x = "Happiness", y = "Count")
+
+hist_4 <- ggplot(lagged_df) +
+  geom_histogram(aes(x = atease), col = "black", fill = "steelblue") +
+  theme_bw() +
+  labs(x = "At Ease", y = "")
+
+title <- ggdraw() + draw_label("Mood Histograms", fontface='bold')
+
+p <- cowplot::plot_grid(hist_1, hist_2, hist_3, hist_4)
+
+cowplot::plot_grid(title, p, ncol=1, rel_heights=c(0.1, 1)) # rel_heights values control title margins
 ```
 
 *Note: Final Model should likely be pooled result when using stochastic model-based imputation*
 
 *Questions:*
 1. What to select as response (1hr or 2hr)?
-2. Should we do imputations for covariates as well?
+2. Should we dichotomize the depression variable?
+3. Should we do imputations for covariates as well? Yes, for final model
 
