@@ -562,6 +562,18 @@ y_{itds} =& \; \alpha_{i} + \beta^{lag} y_{i(t-1)ds} + \beta^{time}x^{time}_{t} 
 $$
 
 ```{r}
+#Time/EMA
+time_count <- c()
+time_count[1] <- 1
+for (i in 1:(nrow(raw_data)-1)) {
+  if (raw_data$day_ema[i+1] == raw_data$day_ema[i]) {
+    time_count[i+1] <- time_count[i]+1
+  }
+  else{
+    time_count[i+1] <- 1
+  }
+}
+
 # Identify weekday/end
 weekday_func <- function(x){
   num <- x %>% sub("T.*", "", .) %>% wday()
@@ -571,13 +583,13 @@ weekday_func <- function(x){
 
 # m_TAR_s ~ m_con + m_sup + m_wel + as.factor(gender) + m_eas + m_dep + m_hap + m_anx + (1 | respid)
 gran_df <- raw_data %>%
-  dplyr::select(TAR_prop_1h, respid, emanum0, spring, tbh1female, datetime_ema, 
-                positive_emotion = frconfl, negative_emotion = frsupp, self_care = dmwell, 
+  dplyr::select(TAR_prop_1h, respid, spring, tbh1female, datetime_ema, 
+                negative_emotion = frconfl, positive_emotion = frsupp, self_care = dmwell, 
                 anxiety, happiness, depression = depr, atease, eat, exercise = exer
                 ) %>%
   mutate(
     respid = as.factor(respid),
-    time = emanum0 + 1, # So it starts at 1 rather than 0 (Treat as numeric?)
+    time = time_count,
     week = weekday_func(datetime_ema),
     spring = ifelse(spring==0, "Fall", "Spring"),
     gender = case_when(
@@ -662,13 +674,7 @@ tab_model(y_imp_mod, lag_mod, show.ci = F)
 
 *Note: Final Model should likely be pooled result when using stochastic model-based imputation*
 
-
-
-
-
-
-
-
-
-
+*Questions:*
+1. What to select as response (1hr or 2hr)?
+2. Should we do imputations for covariates as well?
 
