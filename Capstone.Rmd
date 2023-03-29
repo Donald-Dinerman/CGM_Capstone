@@ -710,15 +710,15 @@ lag_1hr_mod <- lmer(TAR_prop_1h ~ (1 | respid) + TAR_1hr_lagged + time + week + 
 summary(lag_1hr_mod)
 
 # Residuals
-lag_r <- residuals(lag_1hr_mod)
+lag_1hr_r <- residuals(lag_1hr_mod)
 par(mfrow=c(2,2))
-plot(lag_r)
-qqnorm(lag_r)
-qqline(lag_r)
+plot(lag_1hr_r)
+qqnorm(lag_1hr_r)
+qqline(lag_1hr_r)
 
-hist(lag_r)
+hist(lag_1hr_r)
 
-astsa::acf2(lag_r)
+astsa::acf2(lag_1hr_r)
 ```
 
 ### 2 Hour TAR
