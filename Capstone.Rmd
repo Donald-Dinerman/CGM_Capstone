@@ -562,6 +562,39 @@ y_{itds} =& \; \alpha_{i} + \beta^{lag} y_{i(t-1)ds} + \beta^{time}x^{time}_{t} 
 $$
 
 ### 1 Hour TAR
+```{r}
+head(raw_data)
+```
+
+```{r}
+# Measure Time difference since 7 am (Anytime before 7 am is automatically 0)
+# and 
+# Early morning high bg level (boolean)
+# https://www.webmd.com/diabetes/morning-high-blood-sugar-levels (2am-8am)
+
+time_diff <- function(bool = F) {
+
+  ## Time difference numeric
+  my_vec <- ymd_hms(raw_data$datetime_ema)
+
+  # Extract the hms values from the ymd_hms values
+  my_hms <- hms(format(my_vec, "%H:%M:%S"))
+
+  # Convert HMS time to 24-hour format
+  my_decimal_time <- (as.numeric(my_hms) / (60 * 60))
+
+  # Time Diff to 7 am
+  time_diff <- my_decimal_time - 7
+
+  # Cap st (Anytime before 7 am is automatically 0)
+  time_diff_mod <- ifelse(time_diff < 0, 0, time_diff)
+  
+  bool_val <- my_decimal_time >= 2 & my_decimal_time <= 8
+  
+  ifelse(bool == T, return(bool_val), return(time_diff_mod))
+}
+```
+
 
 ```{r}
 #Time/EMA
@@ -790,6 +823,8 @@ tab_model(mod_1hr, lag_1hr_mod, show.ci = F)
 tab_model(mod_2hr, lag_2hr_mod, show.ci = F)
 ```
 
+## Additional Misc. EDA
+
 ```{r}
 # Show histograms for prez
 hist_1 <- ggplot(lagged_df) +
@@ -819,10 +854,32 @@ p <- cowplot::plot_grid(hist_1, hist_2, hist_3, hist_4)
 cowplot::plot_grid(title, p, ncol=1, rel_heights=c(0.1, 1)) # rel_heights values control title margins
 ```
 
+```{r}
+# Histogram of Survey Times
+my_vec <- ymd_hms(raw_data$datetime_ema)
+
+# Extract the hms values from the ymd_hms values
+my_hms <- hms(format(my_vec, "%H:%M:%S"))
+
+# Convert HMS time to 24-hour format
+my_decimal_time <- (as.numeric(my_hms) / (60 * 60))
+
+as.data.frame(my_decimal_time) %>%
+  ggplot() +
+  geom_histogram(aes(x=my_decimal_time), bins = 24, col = "Black", fill = "Steelblue") +
+  labs(x = "Time (Hours)", y = "# Responses", title = "Time Distribution of Survey Responses") +
+  theme_bw()
+```
+
+
 *Note: Final Model should likely be pooled result when using stochastic model-based imputation*
 
 *Questions:*
 1. What to select as response (1hr or 2hr)?
 2. Should we dichotomize the depression variable?
 3. Should we do imputations for covariates as well? Yes, for final model
+
+*Note:*
+1. We changed the time variable so that it is either a boolean (between 2 and 8 am) or numeric difference since 7am (min capped at zero)
+  a. Yet to implement in model, currently time represents daily survey count
 
