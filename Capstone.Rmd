@@ -526,11 +526,11 @@ $$
 \begin{aligned}
 
 y_{itds} =& \; \alpha_{i} + \beta^{time}x^{time}_{t} + \beta^{week} x^{week}_{d} + \beta^{season} x^{season}_{s} + \beta^{gender}x^{gender}_{i} + 
-\beta^{mood} x^{mood}_{itds} + \beta^{positive \:emotions} x^{positive \:emotions}_{itds} +
+\beta^{mood} x^{mood}_{itds} + \beta^{positive \:interactions} x^{positive \:interactions}_{itds} +
 
 \\ &
 
-\beta^{negative \:emotions} x^{negative \:emotions}_{itds} + \beta^{self care}x^{self care}_{itds} + \beta^{eat}x^{eat}_{itds} + \beta^{exercise}x^{exercise}_{itds} + \epsilon_{itds}
+\beta^{negative \:interactions} x^{negative \:interactions}_{itds} + \beta^{self care}x^{self care}_{itds} + \beta^{eat}x^{eat}_{itds} + \beta^{exercise}x^{exercise}_{itds} + \epsilon_{itds}
 
 \end{aligned}
 $$
@@ -539,11 +539,11 @@ $$
 \begin{aligned}
 
 y_{itds} =& \; \alpha_{i} + \beta^{time}x^{time}_{t} + \beta^{week} x^{week}_{d} + \beta^{season} x^{season}_{s} + \beta^{gender}x^{gender}_{i} + 
-\beta^{mood} x^{mood}_{itds} + \beta^{positive \:emotions} x^{positive \:emotions}_{itds} +
+\beta^{mood} x^{mood}_{itds} + \beta^{positive \:interactions} x^{positive \:interactions}_{itds} +
 
 \\ &
 
-\beta^{negative \:emotions} x^{negative \:emotions}_{itds} + \beta^{self care}x^{self care}_{itds} + \beta^{eat}x^{eat}_{itds} + \beta^{exercise}x^{exercise}_{itds} + \epsilon_{itds}
+\beta^{negative \:interactions} x^{negative \:interactions}_{itds} + \beta^{self care}x^{self care}_{itds} + \beta^{eat}x^{eat}_{itds} + \beta^{exercise}x^{exercise}_{itds} + \epsilon_{itds}
 
 \end{aligned}
 $$
@@ -552,11 +552,11 @@ $$
 $$
 \begin{aligned}
 
-y_{itds} =& \; \alpha_{i} + \beta^{lag} y_{i(t-1)ds} + \beta^{time}x^{time}_{t} + \beta^{week} x^{week}_{d} + \beta^{season} x^{season}_{s} + \beta^{gender}x^{gender}_{i} +  \beta^{mood} x^{mood}_{itds} +  \beta^{positive \:emotions} x^{positive \:emotions}_{itds} +
+y_{itds} =& \; \alpha_{i} + \beta^{lag} y_{i(t-1)ds} + \beta^{time}x^{time}_{t} + \beta^{week} x^{week}_{d} + \beta^{season} x^{season}_{s} + \beta^{gender}x^{gender}_{i} +  \beta^{mood} x^{mood}_{itds} +  \beta^{positive \:interactions} x^{positive \:interactions}_{itds} +
 
 \\ &
 
-\beta^{negative \:emotions} x^{negative \:emotions}_{itds} + \beta^{self care}x^{self care}_{itds} + \beta^{eat}x^{eat}_{itds} + \beta^{exercise}x^{exercise}_{itds} + \epsilon_{itds}
+\beta^{negative \:interactions} x^{negative \:interactions}_{itds} + \beta^{self care}x^{self care}_{itds} + \beta^{eat}x^{eat}_{itds} + \beta^{exercise}x^{exercise}_{itds} + \epsilon_{itds}
 
 \end{aligned}
 $$
@@ -620,7 +620,7 @@ weekday_func <- function(x){
 # m_TAR_s ~ m_con + m_sup + m_wel + as.factor(gender) + m_eas + m_dep + m_hap + m_anx + (1 | respid)
 gran_df <- raw_data %>%
   dplyr::select(TAR_prop_1h, respid, spring, tbh1female, datetime_ema, 
-                negative_emotion = frconfl, positive_emotion = frsupp, self_care = dmwell, 
+                negative_interaction = frconfl, positive_interaction = frsupp, self_care = dmwell, 
                 anxiety, happiness, depression = depr, atease, eat, exercise = exer
                 ) %>%
   mutate(
@@ -643,7 +643,7 @@ gran_df %>%
 
 ```{r}
 # Drop all NA
-gran_mod <- lmer(TAR_prop_1h ~ (1 | respid) + time + week + spring + gender + positive_emotion + negative_emotion + 
+gran_mod <- lmer(TAR_prop_1h ~ (1 | respid) + time + week + spring + gender + positive_interaction + negative_interaction + 
                    self_care + anxiety + happiness + depression + atease + eat + exercise,
                     data = drop_na(gran_df))
 
@@ -668,7 +668,7 @@ summary(imputed_Data)
 #get complete data (1st out of 5)
 completeData <- complete(imputed_Data,1)
 
-mod_1hr <- lmer(TAR_prop_1h ~ (1 | respid) + time + week + spring + gender + positive_emotion + negative_emotion + 
+mod_1hr <- lmer(TAR_prop_1h ~ (1 | respid) + time + week + spring + gender + positive_interaction + negative_interaction + 
                     self_care + anxiety + happiness + depression + atease + eat + exercise,
                     data = completeData)
 
@@ -677,7 +677,7 @@ summary(mod_1hr)
 # This is for when I have more time to run the imputation and can pool the parameters (Takes so long)
 # build predictive model
 fit_1hr <- with(data = imputed_Data, 
-            exp = lmer(TAR_prop_1h ~ (1 | respid) + time + week + spring + gender + positive_emotion + negative_emotion + 
+            exp = lmer(TAR_prop_1h ~ (1 | respid) + time + week + spring + gender + positive_interaction + negative_interaction + 
                          self_care + anxiety + happiness + depression + atease + eat + exercise))
 
 # combine results of all 5 models
@@ -703,7 +703,7 @@ lagged_df <- completeData %>%
   mutate(TAR_1hr_lagged = lag(TAR_prop_1h, n = 1, default = NA), .before = week) %>%
   drop_na(TAR_1hr_lagged)
 
-lag_1hr_mod <- lmer(TAR_prop_1h ~ (1 | respid) + TAR_1hr_lagged + time + week + spring + gender + positive_emotion + negative_emotion + 
+lag_1hr_mod <- lmer(TAR_prop_1h ~ (1 | respid) + TAR_1hr_lagged + time + week + spring + gender + positive_interaction + negative_interaction + 
                   self_care + anxiety + happiness + depression + atease + eat + exercise,
                 data = lagged_df)
 
@@ -716,7 +716,7 @@ plot(lag_1hr_r)
 qqnorm(lag_1hr_r)
 qqline(lag_1hr_r)
 
-hist(lag_1hr_r)
+hist(lag_1hr_r, main = "Residual Distribution", xlab = "Residuals")
 
 astsa::acf2(lag_1hr_r)
 ```
@@ -727,7 +727,7 @@ astsa::acf2(lag_1hr_r)
 # Set Data
 gran_2hr_df <- raw_data %>%
   dplyr::select(TAR_prop_2h, respid, spring, tbh1female, datetime_ema, 
-                negative_emotion = frconfl, positive_emotion = frsupp, self_care = dmwell, 
+                negative_interaction = frconfl, positive_interaction = frsupp, self_care = dmwell, 
                 anxiety, happiness, depression = depr, atease, eat, exercise = exer
                 ) %>%
   mutate(
@@ -757,7 +757,7 @@ completeData_2hr <- complete(imputed_Data_2hr,1)
 
 ```{r}
 # Imputation Modeling
-mod_2hr <- lmer(TAR_prop_2h ~ (1 | respid) + time + week + spring + gender + positive_emotion + negative_emotion + 
+mod_2hr <- lmer(TAR_prop_2h ~ (1 | respid) + time + week + spring + gender + positive_interaction + negative_interaction + 
                     self_care + anxiety + happiness + depression + atease + eat + exercise,
                     data = completeData_2hr)
 
@@ -766,7 +766,7 @@ summary(mod_2hr)
 # This is for when I have more time to run the imputation and can pool the parameters (Takes so long)
 # build predictive model
 fit_2hr <- with(data = imputed_Data_2hr, 
-            exp = lmer(TAR_prop_2h ~ (1 | respid) + time + week + spring + gender + positive_emotion + negative_emotion + 
+            exp = lmer(TAR_prop_2h ~ (1 | respid) + time + week + spring + gender + positive_interaction + negative_interaction + 
                          self_care + anxiety + happiness + depression + atease + eat + exercise))
 
 # combine results of all 5 models
@@ -793,7 +793,7 @@ lagged_2hr_df <- completeData_2hr %>%
   mutate(TAR_2hr_lagged = lag(TAR_prop_2h, n = 1, default = NA), .before = week) %>%
   drop_na(TAR_2hr_lagged)
 
-lag_2hr_mod <- lmer(TAR_prop_2h ~ (1 | respid) + TAR_2hr_lagged + time + week + spring + gender + positive_emotion + negative_emotion + 
+lag_2hr_mod <- lmer(TAR_prop_2h ~ (1 | respid) + TAR_2hr_lagged + time + week + spring + gender + positive_interaction + negative_interaction + 
                   self_care + anxiety + happiness + depression + atease + eat + exercise,
                 data = lagged_2hr_df)
 
@@ -882,4 +882,11 @@ as.data.frame(my_decimal_time) %>%
 *Note:*
 1. We changed the time variable so that it is either a boolean (between 2 and 8 am) or numeric difference since 7am (min capped at zero)
   a. Yet to implement in model, currently time represents daily survey count
+
+```{r}
+# Look at changing time t of interaction/mood variables
+  # Check cross-correlation of TAR prop and moods
+# Look at adding and checking results for different feature engineering of time (they prefer time since 7 am)
+# Look into accounting for autocorrelated errors in the model (like GLS but for mixed model)
+```
 
