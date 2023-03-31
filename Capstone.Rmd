@@ -890,3 +890,74 @@ as.data.frame(my_decimal_time) %>%
 # Look into accounting for autocorrelated errors in the model (like GLS but for mixed model)
 ```
 
+### Time Series Regression
+
+```{r}
+# Time series regression
+# Fit ols
+# Get ARMA(p,q) of residuals
+# Refit OLS with assumption that residuals follow ARMA(p,q) process
+# Verify refit residuals are white noise
+
+# Turn binary characters to binary numbers
+# Everything needs to be numeric (one hot encoding for characters) for xreg (svd)
+ts_reg_df <- completeData_2hr %>% 
+  na.omit() %>%
+  dplyr::select(TAR_prop_2h, time, week, spring, gender, positive_interaction, negative_interaction, 
+                  self_care, anxiety, happiness, depression, atease, eat, exercise) %>%
+  mutate(week = ifelse(week == "Weekday", 1, 0),
+         spring = ifelse(spring == "Fall", 1, 0),
+         gender = ifelse(gender == "Male", 1, 0)) 
+
+fit_1 <- lm(TAR_prop_2h ~ time + week + spring + gender + positive_interaction + negative_interaction +
+              self_care + anxiety + happiness + depression + atease + eat + exercise,
+            data = ts_reg_df)
+
+summary(fit_1)
+# looks like AR(1), ARMA(1,0)
+plot(ts(resid(fit_1)))
+acf2(resid(fit_1))
+
+qqnorm(resid(fit2))
+qqline(resid(fit2))
+```
+
+```{r}
+external_reg <- ts_reg_df %>%
+  dplyr::select(-TAR_prop_2h) %>%
+  as.matrix()
+
+TAR_prop_2h_no_na <- ts_reg_df %>%
+  dplyr::select(TAR_prop_2h) %>%
+  as.matrix()
+
+fit_2 <- arima(TAR_prop_2h_no_na, order = c(1,0,0), xreg = external_reg)
+
+summary(fit_2)
+
+# Residuals not looking like white noise
+plot(resid(fit_2))
+acf2(resid(fit_2))
+
+qqnorm(resid(fit2))
+qqline(resid(fit2))
+```
+
+```{r}
+# automatic "best" arima model search to model error
+# ARIMA(p,d,q)
+fit_3 <- auto.arima(TAR_prop_2h_no_na, xreg = external_reg, trace = T, seasonal = F, stepwise = F, approximation = F)
+```
+
+```{r}
+# Summarise results
+# Residuals look more like white noise here
+summary(fit_3)
+
+plot(resid(fit_3))
+acf2(resid(fit_3))
+
+qqnorm(resid(fit_3))
+qqline(resid(fit_3))
+```
+
