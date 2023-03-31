@@ -70,6 +70,8 @@ library(mice)
 library(broom.mixed) # tidy the lmer for pool()
 library(lme4)
 library(sjPlot)
+library(astsa)
+library(forecast)
 ```
 
 ```{r}
@@ -918,8 +920,8 @@ summary(fit_1)
 plot(ts(resid(fit_1)))
 acf2(resid(fit_1))
 
-qqnorm(resid(fit2))
-qqline(resid(fit2))
+qqnorm(resid(fit_1))
+qqline(resid(fit_1))
 ```
 
 ```{r}
@@ -939,8 +941,8 @@ summary(fit_2)
 plot(resid(fit_2))
 acf2(resid(fit_2))
 
-qqnorm(resid(fit2))
-qqline(resid(fit2))
+qqnorm(resid(fit_2))
+qqline(resid(fit_2))
 ```
 
 ```{r}
@@ -952,6 +954,7 @@ fit_3 <- auto.arima(TAR_prop_2h_no_na, xreg = external_reg, trace = T, seasonal 
 ```{r}
 # Summarise results
 # Residuals look more like white noise here
+# Hard to get away from bimodal residuals
 summary(fit_3)
 
 plot(resid(fit_3))
@@ -959,5 +962,19 @@ acf2(resid(fit_3))
 
 qqnorm(resid(fit_3))
 qqline(resid(fit_3))
+```
+
+### Lagged Regression
+
+```{r}
+
+```
+
+
+### Vector ARMA
+
+```{r}
+# Build VARMA(p,q) model
+# cardMortality var.rmd
 ```
 
