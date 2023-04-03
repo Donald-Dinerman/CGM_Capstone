@@ -962,19 +962,86 @@ acf2(resid(fit_3))
 
 qqnorm(resid(fit_3))
 qqline(resid(fit_3))
+
+hist(resid(fit_3))
+```
+
+#### Male
+
+```{r}
+external_reg_male <- ts_reg_df %>%
+  dplyr::filter(gender == 1) %>%
+  dplyr::select(-TAR_prop_2h) %>%
+  as.matrix()
+
+TAR_prop_2h_no_na_male <- ts_reg_df %>%
+  dplyr::filter(gender == 1) %>%
+  dplyr::select(TAR_prop_2h) %>%
+  as.matrix()
+
+fit_3_male <- auto.arima(TAR_prop_2h_no_na_male, xreg = external_reg_male, trace = T, seasonal = F, stepwise = F, approximation = F)
+
+summary(fit_3_male)
+
+plot(resid(fit_3_male))
+acf2(resid(fit_3_male))
+
+qqnorm(resid(fit_3_male))
+qqline(resid(fit_3_male))
+
+hist(resid(fit_3_male))
+```
+
+#### Female
+
+```{r}
+external_reg_female <- ts_reg_df %>%
+  dplyr::filter(gender == 0) %>%
+  dplyr::select(-TAR_prop_2h) %>%
+  as.matrix()
+
+TAR_prop_2h_no_na_female <- ts_reg_df %>%
+  dplyr::filter(gender == 0) %>%
+  dplyr::select(TAR_prop_2h) %>%
+  as.matrix()
+
+# Error in search.arima(x, d, D, max.p, max.q, max.P, max.Q, max.order,  :  No ARIMA model able to be estimated
+# fit_3_female <- auto.arima(TAR_prop_2h_no_na_female, xreg = external_reg_female, trace = T, seasonal = F, stepwise = F, approximation = F)
+# 
+# summary(fit_3_female)
+# 
+# plot(resid(fit_3_female))
+# acf2(resid(fit_3_female))
+# 
+# qqnorm(resid(fit_3_female))
+# qqline(resid(fit_3_female))
+# 
+# hist(resid(fit_3_female))
 ```
 
 ### Lagged Regression
 
 ```{r}
-
+# Maybe not do
 ```
 
 
 ### Vector ARMA
 
 ```{r}
+library(vars)
 # Build VARMA(p,q) model
 # cardMortality var.rmd
+
+x_reg <- ts_reg_df %>% as.matrix()
+
+var_select <- VARselect(x_reg, lag.max = 8, type = 'both')
+best_lag <- var_select$selection %>% min()
+
+var_fit <- VAR(x_reg, p = best_lag, type = 'both')
+summary(var_fit)
+
+#plot(ts(resid(var_fit)))
+#acf(resid(var_fit))
 ```
 
