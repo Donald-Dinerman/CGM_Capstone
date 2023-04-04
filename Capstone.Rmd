@@ -600,35 +600,16 @@ time_diff <- function(bool = F) {
 
 ```{r}
 #Time/EMA
-# Change to time since 7 am (or other early time period)
-time_count <- c()
-time_count[1] <- 1
-for (i in 1:(nrow(raw_data)-1)) {
-  if (raw_data$day_ema[i+1] == raw_data$day_ema[i]) {
-    time_count[i+1] <- time_count[i]+1
-  }
-  else{
-    time_count[i+1] <- 1
-  }
-}
-
-# Identify weekday/end
-weekday_func <- function(x){
-  num <- x %>% sub("T.*", "", .) %>% wday()
-  ans <- ifelse(num < 6, "Weekday", "Weekend")
-  return(ans)
-}
-
 # m_TAR_s ~ m_con + m_sup + m_wel + as.factor(gender) + m_eas + m_dep + m_hap + m_anx + (1 | respid)
 gran_df <- raw_data %>%
-  dplyr::select(TAR_prop_1h, respid, spring, tbh1female, datetime_ema, 
+  dplyr::select(TAR_prop_1h, respid, spring, weekend, tbh1female, datetime_ema, 
                 negative_interaction = frconfl, positive_interaction = frsupp, self_care = dmwell, 
                 anxiety, happiness, depression = depr, atease, eat, exercise = exer
                 ) %>%
   mutate(
     respid = as.factor(respid),
-    time = time_count,
-    week = weekday_func(datetime_ema),
+    time = time_diff(),
+    week = weekend,
     spring = ifelse(spring==0, "Fall", "Spring"),
     gender = case_when(
       tbh1female == 0 ~ "Male",
@@ -639,7 +620,7 @@ gran_df <- raw_data %>%
 
 # Missing Values
 gran_df %>%
-  select(everything()) %>%  # replace to your needs
+  dplyr::select(everything()) %>%  # replace to your needs
   summarise_all(funs(sum(is.na(.))))
 ```
 
@@ -949,6 +930,9 @@ qqline(resid(fit_2))
 # automatic "best" arima model search to model error
 # ARIMA(p,d,q)
 fit_3 <- auto.arima(TAR_prop_2h_no_na, xreg = external_reg, trace = T, seasonal = F, stepwise = F, approximation = F)
+
+# These fits are equivalent
+# fit_4 <- arima(TAR_prop_2h_no_na, order = c(1,0,4), xreg = external_reg)
 ```
 
 ```{r}
@@ -1023,6 +1007,12 @@ TAR_prop_2h_no_na_female <- ts_reg_df %>%
 
 ```{r}
 # Maybe not do
+```
+
+### Bootstrap Results
+
+```{r}
+# Bootstrap beta parameters from models with error ARMA process considered and with it not considered
 ```
 
 
