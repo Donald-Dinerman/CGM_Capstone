@@ -1121,7 +1121,7 @@ var_select <- VARselect(x_reg, lag.max = 8, type = 'both')
 best_lag <- var_select$selection %>% min()
 
 var_fit <- VAR(x_reg, p = best_lag, type = 'both')
-summary(var_fit)
+#summary(var_fit)
 
 #plot(ts(resid(var_fit)))
 #acf(resid(var_fit))
