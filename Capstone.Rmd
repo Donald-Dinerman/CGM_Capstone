@@ -600,9 +600,27 @@ time_diff <- function(bool = F) {
 
 ```{r}
 #Time/EMA
-# m_TAR_s ~ m_con + m_sup + m_wel + as.factor(gender) + m_eas + m_dep + m_hap + m_anx + (1 | respid)
+# Change to time since 7 am (or other early time period)
+time_count <- c()
+time_count[1] <- 1
+for (i in 1:(nrow(raw_data)-1)) {
+  if (raw_data$day_ema[i+1] == raw_data$day_ema[i]) {
+    time_count[i+1] <- time_count[i]+1
+  }
+  else{
+    time_count[i+1] <- 1
+  }
+}
+
+# Identify weekday/end
+weekday_func <- function(x){
+  num <- x %>% sub("T.*", "", .) %>% wday()
+  ans <- ifelse(num < 6, "Weekday", "Weekend")
+  return(ans)
+}
+
 gran_df <- raw_data %>%
-  dplyr::select(TAR_prop_1h, respid, spring, weekend, tbh1female, datetime_ema, 
+  dplyr::select(TAR_prop_1h, respid, spring, weekend, tbh1female, weekend, 
                 negative_interaction = frconfl, positive_interaction = frsupp, self_care = dmwell, 
                 anxiety, happiness, depression = depr, atease, eat, exercise = exer
                 ) %>%
@@ -620,7 +638,7 @@ gran_df <- raw_data %>%
 
 # Missing Values
 gran_df %>%
-  dplyr::select(everything()) %>%  # replace to your needs
+  select(everything()) %>%  # replace to your needs
   summarise_all(funs(sum(is.na(.))))
 ```
 
@@ -709,14 +727,14 @@ astsa::acf2(lag_1hr_r)
 ```{r}
 # Set Data
 gran_2hr_df <- raw_data %>%
-  dplyr::select(TAR_prop_2h, respid, spring, tbh1female, datetime_ema, 
+  dplyr::select(TAR_prop_2h, respid, spring, tbh1female, weekend, 
                 negative_interaction = frconfl, positive_interaction = frsupp, self_care = dmwell, 
                 anxiety, happiness, depression = depr, atease, eat, exercise = exer
                 ) %>%
   mutate(
     respid = as.factor(respid),
-    time = time_count,
-    week = weekday_func(datetime_ema),
+    time = time_diff(),
+    week = weekend,
     spring = ifelse(spring==0, "Fall", "Spring"),
     gender = case_when(
       tbh1female == 0 ~ "Male",
@@ -888,8 +906,7 @@ ts_reg_df <- completeData_2hr %>%
   na.omit() %>%
   dplyr::select(TAR_prop_2h, time, week, spring, gender, positive_interaction, negative_interaction, 
                   self_care, anxiety, happiness, depression, atease, eat, exercise) %>%
-  mutate(week = ifelse(week == "Weekday", 1, 0),
-         spring = ifelse(spring == "Fall", 1, 0),
+  mutate(spring = ifelse(spring == "Fall", 1, 0),
          gender = ifelse(gender == "Male", 1, 0)) 
 
 fit_1 <- lm(TAR_prop_2h ~ time + week + spring + gender + positive_interaction + negative_interaction +
@@ -909,6 +926,8 @@ qqline(resid(fit_1))
 external_reg <- ts_reg_df %>%
   dplyr::select(-TAR_prop_2h) %>%
   as.matrix()
+
+external_reg[,2] %>% unique()
 
 TAR_prop_2h_no_na <- ts_reg_df %>%
   dplyr::select(TAR_prop_2h) %>%
@@ -939,15 +958,18 @@ fit_3 <- auto.arima(TAR_prop_2h_no_na, xreg = external_reg, trace = T, seasonal 
 # Summarise results
 # Residuals look more like white noise here
 # Hard to get away from bimodal residuals
-summary(fit_3)
+sum_3 <- summary(fit_3)
 
-plot(resid(fit_3))
-acf2(resid(fit_3))
+sum_3
 
-qqnorm(resid(fit_3))
-qqline(resid(fit_3))
+Residuals <- resid(fit_3)
+plot(Residuals)
+acf2(Residuals)
 
-hist(resid(fit_3))
+qqnorm(Residuals)
+qqline(Residuals)
+
+hist(Residuals)
 ```
 
 #### Male
@@ -1013,6 +1035,76 @@ TAR_prop_2h_no_na_female <- ts_reg_df %>%
 
 ```{r}
 # Bootstrap beta parameters from models with error ARMA process considered and with it not considered
+beta_name <- sum_3$coef %>% data.frame() %>% rownames()
+df_coef <- matrix(NA, nrow = 1, ncol = length(beta_name)) %>% as.data.frame()
+colnames(df_coef) <- beta_name
+n <- nrow(ts_reg_df)
+
+B <- 1000
+for(i in 1:B){
+  df_boot <- sample_n(data.frame(ts_reg_df), size = n, replace = F)
+
+  external_reg_boot <- df_boot %>%
+    dplyr::select(-TAR_prop_2h) %>%
+    as.matrix()
+
+  TAR_prop_2h_no_na_boot <- df_boot %>%
+    dplyr::select(TAR_prop_2h) %>%
+    as.matrix()
+
+  fit_boot <- arima(TAR_prop_2h_no_na_boot, order = c(1,0,4), xreg = external_reg_boot)
+
+  sum_boot <- summary(fit_boot)
+
+  df_coef[i,] <- sum_boot$coef
+}
+
+#apply(df_coef,2, hist, main = "t")
+
+# Final Result
+# Coefficient           Average Estimate          95% Confidence Interval
+
+ci_func <- function(x, sig_ind = T){
+  
+  center <- mean(x)
+  stddev <- sd(x)
+  n <- length(x)
+  se <- qt(0.975, df=n-1)*stddev/sqrt(n)
+  lower_bound <- (center - se) %>% round(4)
+  upper_bound <- (center + se) %>% round(4)
+  
+  str <- paste("(", lower_bound, ", ", upper_bound, ")", sep = "")
+  
+  sig <- ifelse(lower_bound <= 0 & upper_bound >= 0, 0, 1)
+  
+  ifelse(sig_ind == F, return(str), return(sig))
+}
+
+avg_est <- apply(df_coef, 2, mean)
+
+conf_int <- apply(df_coef, 2, ci_func, sig_ind = F)
+
+conf_sig <- apply(df_coef, 2, ci_func, sig_ind = T)
+
+boot_results <- data.frame(Coefficients = beta_name, Estimate = round(avg_est,5), `CI 95` = conf_int, Significance = conf_sig)
+
+rownames(boot_results) <- NULL
+
+boot_results %>% 
+  kbl() %>% 
+  kable_classic(full_width = F, html_font = "Cambria")
+
+# Create Histograms
+hist_func <- function(df) {
+  column_names <- colnames(df)
+  
+  for (column in column_names) {
+    hist(df[[column]], main = column, xlab = "")
+  }
+}
+
+par(mfrow = c(2,2))
+hist_func(df_coef)
 ```
 
 
