@@ -638,7 +638,7 @@ gran_df <- raw_data %>%
 
 # Missing Values
 gran_df %>%
-  select(everything()) %>%  # replace to your needs
+  dplyr::select(everything()) %>%  # replace to your needs
   summarise_all(funs(sum(is.na(.))))
 ```
 
@@ -745,7 +745,7 @@ gran_2hr_df <- raw_data %>%
 
 # Missing Values
 gran_2hr_df %>%
-  select(everything()) %>%  # replace to your needs
+  dplyr::select(everything()) %>%  # replace to your needs
   summarise_all(funs(sum(is.na(.))))
 
 # Imputation
@@ -798,7 +798,9 @@ lag_2hr_mod <- lmer(TAR_prop_2h ~ (1 | respid) + TAR_2hr_lagged + time + week + 
                   self_care + anxiety + happiness + depression + atease + eat + exercise,
                 data = lagged_2hr_df)
 
-summary(lag_2hr_mod)
+sum_mm <- summary(lag_2hr_mod)
+
+sum_mm
 
 # Residuals
 lag_2hr_r <- residuals(lag_2hr_mod)
@@ -1035,6 +1037,10 @@ TAR_prop_2h_no_na_female <- ts_reg_df %>%
 
 ```{r}
 # Bootstrap beta parameters from models with error ARMA process considered and with it not considered
+# Make point estimate the estimate from the model on the original data
+# Calculate confidence interval as the values between the 2.5% and 97.5% of the data
+
+avg_est <- sum_3$coef
 beta_name <- sum_3$coef %>% data.frame() %>% rownames()
 df_coef <- matrix(NA, nrow = 1, ncol = length(beta_name)) %>% as.data.frame()
 colnames(df_coef) <- beta_name
@@ -1042,7 +1048,7 @@ n <- nrow(ts_reg_df)
 
 B <- 1000
 for(i in 1:B){
-  df_boot <- sample_n(data.frame(ts_reg_df), size = n, replace = F)
+  df_boot <- sample_n(data.frame(ts_reg_df), size = n, replace = T)
 
   external_reg_boot <- df_boot %>%
     dplyr::select(-TAR_prop_2h) %>%
@@ -1059,32 +1065,23 @@ for(i in 1:B){
   df_coef[i,] <- sum_boot$coef
 }
 
-#apply(df_coef,2, hist, main = "t")
+conf_int <- 0
+conf_sig <- 0
 
-# Final Result
-# Coefficient           Average Estimate          95% Confidence Interval
-
-ci_func <- function(x, sig_ind = T){
+for(i in 1:ncol(df_coef)){
   
-  center <- mean(x)
-  stddev <- sd(x)
-  n <- length(x)
+  center <- avg_est[i]
+  stddev <- sd(df_coef[,i])
+  n <- length(df_coef[,i])
+  
   se <- qt(0.975, df=n-1)*stddev/sqrt(n)
   lower_bound <- (center - se) %>% round(4)
   upper_bound <- (center + se) %>% round(4)
   
-  str <- paste("(", lower_bound, ", ", upper_bound, ")", sep = "")
+  conf_int[i] <- paste("(", lower_bound, ", ", upper_bound, ")", sep = "")
   
-  sig <- ifelse(lower_bound <= 0 & upper_bound >= 0, 0, 1)
-  
-  ifelse(sig_ind == F, return(str), return(sig))
+  conf_sig[i] <- ifelse(lower_bound <= 0 & upper_bound >= 0, 0, 1)
 }
-
-avg_est <- apply(df_coef, 2, mean)
-
-conf_int <- apply(df_coef, 2, ci_func, sig_ind = F)
-
-conf_sig <- apply(df_coef, 2, ci_func, sig_ind = T)
 
 boot_results <- data.frame(Coefficients = beta_name, Estimate = round(avg_est,5), `CI 95` = conf_int, Significance = conf_sig)
 
@@ -1107,10 +1104,96 @@ par(mfrow = c(2,2))
 hist_func(df_coef)
 ```
 
+```{r}
+# Compare Bootstrap Confidence Intervals with Normal model Confidence Intervals
+
+# Bootstrap mixed model with lag for response
+
+# Wants mixed model with lag (previous mood) effects for mood/interactions on the response, don't include time t mood/interactions
+```
+
+```{r}
+# Mixed model bootstrap
+# Bootstrap beta parameters from models with error ARMA process considered and with it not considered
+# Make point estimate the estimate from the model on the original data
+# Calculate confidence interval as the values between the 2.5% and 97.5% of the data
+
+avg_est_mm <- sum_mm$coefficients[,1]
+beta_name_mm <- avg_est_mm %>% data.frame() %>% rownames()
+df_coef_mm <- matrix(NA, nrow = 1, ncol = length(beta_name_mm)) %>% as.data.frame()
+colnames(df_coef_mm) <- beta_name_mm
+
+respid_df <- completeData_2hr %>%
+  mutate(TAR_2hr_lagged = lag(TAR_prop_2h, n = 1, default = NA), .before = week) %>%
+  drop_na(TAR_2hr_lagged)
+
+n <- nrow(respid_df)
+B <- 1000
+for(i in 1:B){
+  df_boot_mm <- sample_n(data.frame(respid_df), size = n, replace = T)
+
+  fit_boot_mm <- lmer(TAR_prop_2h ~ (1 | respid) + TAR_2hr_lagged + time + week + spring + gender + positive_interaction + negative_interaction + 
+                    self_care + anxiety + happiness + depression + atease + eat + exercise,
+                    data = df_boot_mm)
+
+  sum_boot_mm <- summary(fit_boot_mm)
+
+  df_coef_mm[i,] <- sum_boot_mm$coefficients[,1]
+}
+
+conf_int_mm <- 0
+conf_sig_mm <- 0
+
+for(i in 1:ncol(df_coef_mm)){
+  
+  center <- avg_est[i]
+  stddev <- sd(df_coef[,i])
+  n <- length(df_coef[,i])
+  
+  se <- qt(0.975, df=n-1)*stddev/sqrt(n)
+  lower_bound <- (center - se) %>% round(4)
+  upper_bound <- (center + se) %>% round(4)
+  
+  conf_int_mm[i] <- paste("(", lower_bound, ", ", upper_bound, ")", sep = "")
+  
+  conf_sig_mm[i] <- ifelse(lower_bound <= 0 & upper_bound >= 0, 0, 1)
+}
+
+boot_results_mm <- data.frame(Coefficients = beta_name_mm, 
+                              Estimate = round(avg_est_mm,5), 
+                              `CI 95` = conf_int_mm, 
+                              Significance = conf_sig_mm)
+
+rownames(boot_results_mm) <- NULL
+
+# Create Histograms
+hist_func <- function(df) {
+  column_names <- colnames(df)
+  
+  for (column in column_names) {
+    hist(df[[column]], main = column, xlab = "")
+  }
+}
+
+par(mfrow = c(2,2))
+hist_func(df_coef_mm)
+```
+
+```{r}
+# Compare Bootstrap vs Normal
+# OLS
+boot_results %>% kbl() %>% kable_classic(full_width = F, html_font = "Cambria")
+tab_model(fit_3)
+
+# MM
+boot_results_mm %>% kbl() %>% kable_classic(full_width = F, html_font = "Cambria")
+tab_model(lag_2hr_mod)
+```
+
 
 ### Vector ARMA
 
-```{r}
+```{r, include=F}
 library(vars)
 # Build VARMA(p,q) model
 # cardMortality var.rmd
