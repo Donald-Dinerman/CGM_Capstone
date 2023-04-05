@@ -874,6 +874,15 @@ as.data.frame(my_decimal_time) %>%
   theme_bw()
 ```
 
+```{r}
+# Maybe treat as binary rather than continuous
+gran_2hr_df %>%
+  ggplot() +
+  geom_histogram(aes(TAR_prop_2h), col = "Black", fill = "steelblue") +
+  labs(x = "TAR 2hr", y = "# Responses", title = "TAR 2hr Distribution") +
+  theme_bw()
+```
+
 
 *Note: Final Model should likely be pooled result when using stochastic model-based imputation*
 
