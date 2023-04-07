@@ -898,13 +898,101 @@ gran_2hr_df %>%
 ```{r}
 # Look at changing time t of interaction/mood variables
   # Check cross-correlation of TAR prop and moods
-# Look at adding and checking results for different feature engineering of time (they prefer time since 7 am)
-# Look into accounting for autocorrelated errors in the model (like GLS but for mixed model)
 ```
+
+# Binary Modeling
+
+### Logistic Regression
+
+```{r}
+# Set Data
+logistic_gran_2hr_df <- raw_data %>%
+  dplyr::select(TAR_bin_2h, respid, spring, tbh1female, weekend, tbh1pump,
+                negative_interaction = frconfl, positive_interaction = frsupp, self_care = dmwell, 
+                anxiety, happiness, depression = depr, atease, eat, exercise = exer
+                ) %>%
+  mutate(
+    TAR_bin_2h = as.factor(TAR_bin_2h),
+    respid = as.factor(respid),
+    time = time_diff(),
+    week = weekend,
+    spring = ifelse(spring==0, "Fall", "Spring"),
+    gender = case_when(
+      tbh1female == 0 ~ "Male",
+      tbh1female == 1 ~ "Female",
+      tbh1female == 2 ~ "Non Binary"),
+    pump = as.factor(tbh1pump),
+    .keep = "unused", .after = TAR_bin_2h) %>%
+  filter(gender != "Non Binary")
+
+# Missing Values
+logistic_gran_2hr_df %>%
+  dplyr::select(everything()) %>%  # replace to your needs
+  summarise_all(funs(sum(is.na(.))))
+
+# Imputation
+logistic_impute_list_2hr <- make.blocks(c("TAR_bin_2h"))
+
+logistic_imputed_Data_2hr <- mice(logistic_gran_2hr_df, m=2, maxit = 50, method = 'logreg', seed = 500, blocks = logistic_impute_list_2hr)
+
+logistic_completeData_2hr <- complete(logistic_imputed_Data_2hr, 1)
+```
+
+
+```{r}
+# Use binary response and respective lag
+logistic_2hr_df <- logistic_completeData_2hr %>%
+  mutate(TAR_bin_2h_lagged = lag(TAR_bin_2h, n = 1, default = NA), .before = week) %>%
+  drop_na(TAR_bin_2h_lagged)
+
+# Fit Model
+lag_2hr_logistic <- glm(TAR_bin_2h ~ TAR_bin_2h_lagged + time + week + spring + gender + pump + positive_interaction + negative_interaction +
+                          self_care + anxiety + happiness + depression + atease + eat + exercise,
+                        data = logistic_2hr_df, 
+                        family = "binomial")
+
+#Model Summary
+summary(lag_2hr_logistic)
+
+# Model Diagnostics
+par(mfrow=c(2,2))
+plot(lag_2hr_logistic)
+
+# Residual Shape
+hist(resid(lag_2hr_logistic))
+
+# Multicollinearity
+car::vif(lag_2hr_logistic)
+
+acf2(resid(lag_2hr_logistic)) # ARMA(1,1)
+```
+
+```{r}
+# Fit Mixed Model
+lag_2hr_mm_logistic <- glmer(TAR_bin_2h ~ (1 | respid) + TAR_bin_2h_lagged + time + week + spring + gender + pump +
+                               positive_interaction + negative_interaction + self_care + anxiety + happiness + depression + 
+                               atease + eat + exercise,
+                             data = logistic_2hr_df, 
+                             family = binomial, control = glmerControl(optimizer ="bobyqa")) # Nelder_Mead
+
+# Model Summary
+summary(lag_2hr_mm_logistic)
+
+# print the mod results without correlations among fixed effects
+print(lag_2hr_mm_logistic, corr = FALSE)
+
+# Shape of residuals
+hist(resid(lag_2hr_mm_logistic))
+
+acf2(resid(lag_2hr_mm_logistic)) # ARMA(1,1)
+```
+
+
+# Continuous Modeling
 
 ### Time Series Regression
 
-```{r}
+```{r, eval=F}
 # Time series regression
 # Fit ols
 # Get ARMA(p,q) of residuals
@@ -933,7 +1021,7 @@ qqnorm(resid(fit_1))
 qqline(resid(fit_1))
 ```
 
-```{r}
+```{r,eval=F}
 external_reg <- ts_reg_df %>%
   dplyr::select(-TAR_prop_2h) %>%
   as.matrix()
@@ -956,7 +1044,7 @@ qqnorm(resid(fit_2))
 qqline(resid(fit_2))
 ```
 
-```{r}
+```{r,eval=F}
 # automatic "best" arima model search to model error
 # ARIMA(p,d,q)
 fit_3 <- auto.arima(TAR_prop_2h_no_na, xreg = external_reg, trace = T, seasonal = F, stepwise = F, approximation = F)
@@ -965,7 +1053,7 @@ fit_3 <- auto.arima(TAR_prop_2h_no_na, xreg = external_reg, trace = T, seasonal 
 # fit_4 <- arima(TAR_prop_2h_no_na, order = c(1,0,4), xreg = external_reg)
 ```
 
-```{r}
+```{r,eval=F}
 # Summarise results
 # Residuals look more like white noise here
 # Hard to get away from bimodal residuals
@@ -985,7 +1073,7 @@ hist(Residuals)
 
 #### Male
 
-```{r}
+```{r,eval=F}
 external_reg_male <- ts_reg_df %>%
   dplyr::filter(gender == 1) %>%
   dplyr::select(-TAR_prop_2h) %>%
@@ -1011,7 +1099,7 @@ hist(resid(fit_3_male))
 
 #### Female
 
-```{r}
+```{r,eval=F}
 external_reg_female <- ts_reg_df %>%
   dplyr::filter(gender == 0) %>%
   dplyr::select(-TAR_prop_2h) %>%
@@ -1036,15 +1124,9 @@ TAR_prop_2h_no_na_female <- ts_reg_df %>%
 # hist(resid(fit_3_female))
 ```
 
-### Lagged Regression
-
-```{r}
-# Maybe not do
-```
-
 ### Bootstrap Results
 
-```{r}
+```{r,eval=F}
 # Bootstrap beta parameters from models with error ARMA process considered and with it not considered
 # Make point estimate the estimate from the model on the original data
 # Calculate confidence interval as the values between the 2.5% and 97.5% of the data
@@ -1113,7 +1195,7 @@ par(mfrow = c(2,2))
 hist_func(df_coef)
 ```
 
-```{r}
+```{r,eval=F}
 # Compare Bootstrap Confidence Intervals with Normal model Confidence Intervals
 
 # Bootstrap mixed model with lag for response
@@ -1121,7 +1203,7 @@ hist_func(df_coef)
 # Wants mixed model with lag (previous mood) effects for mood/interactions on the response, don't include time t mood/interactions
 ```
 
-```{r}
+```{r,eval=F}
 # Mixed model bootstrap
 # Bootstrap beta parameters from models with error ARMA process considered and with it not considered
 # Make point estimate the estimate from the model on the original data
@@ -1188,7 +1270,7 @@ par(mfrow = c(2,2))
 hist_func(df_coef_mm)
 ```
 
-```{r}
+```{r,eval=F}
 # Compare Bootstrap vs Normal
 # OLS
 boot_results %>% kbl() %>% kable_classic(full_width = F, html_font = "Cambria")
@@ -1199,23 +1281,4 @@ boot_results_mm %>% kbl() %>% kable_classic(full_width = F, html_font = "Cambria
 tab_model(lag_2hr_mod)
 ```
 
-
-### Vector ARMA
-
-```{r, include=F}
-library(vars)
-# Build VARMA(p,q) model
-# cardMortality var.rmd
-
-x_reg <- ts_reg_df %>% as.matrix()
-
-var_select <- VARselect(x_reg, lag.max = 8, type = 'both')
-best_lag <- var_select$selection %>% min()
-
-var_fit <- VAR(x_reg, p = best_lag, type = 'both')
-#summary(var_fit)
-
-#plot(ts(resid(var_fit)))
-#acf(resid(var_fit))
-```
 
