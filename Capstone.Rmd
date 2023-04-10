@@ -1000,6 +1000,14 @@ acf2(resid_mm) # ARMA(1,1)
 ```
 
 ```{r}
+odds_func <- function(x){
+  val <- exp(x) - 1
+  return(val)
+}
+```
+
+
+```{r}
 # Autocorrelation Error Structure
 fit_3 <- auto.arima(resid_mm, trace = T, seasonal = F, stepwise = F, approximation = F)
 summary(fit_3)
@@ -1020,9 +1028,10 @@ pql_error_sum <- summary(lag_2hr_mm_logistic_error)
 
 pql_error_sum$tTable %>% 
   data.frame() %>% 
+  mutate(odds_diff = odds_func(Value), .before = Value) %>%
   rownames_to_column(var = "var_name") %>%
   mutate(significant = ifelse(p.value < 0.05, 1, 0)) %>%
-  dplyr::select(var_name, Value, p.value, significant) %>%
+  dplyr::select(var_name, odds_diff, Value, p.value, significant) %>%
   mutate_if(is.numeric, round, digits = 3) %>%
   kbl() %>%
   kable_classic()
@@ -1048,9 +1057,10 @@ pql_sum <- summary(lag_2hr_mm_logistic_pql)
 
 pql_sum$tTable %>% 
   data.frame() %>% 
+  mutate(odds_diff = odds_func(Value), .before = Value) %>%
   rownames_to_column(var = "var_name") %>%
   mutate(significant = ifelse(p.value < 0.05, 1, 0)) %>%
-  dplyr::select(var_name, Value, p.value, significant) %>%
+  dplyr::select(var_name, odds_diff, Value, p.value, significant) %>%
   mutate_if(is.numeric, round, digits = 3) %>%
   kbl() %>%
   kable_classic()
