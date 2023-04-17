@@ -1013,16 +1013,6 @@ interp_odds_func <- function(x){
 # print the mod results without correlations among fixed effects
 # print(lag_2hr_mm_logistic, corr = FALSE)
 
-# Shape of residuals
-resid_mm <- residuals(lag_2hr_mm_logistic, type = "pearson") # response
-Residuals <- resid_mm
-hist(Residuals)
-#qqnorm(resid_mm); qqline(resid_mm)
-acf2(Residuals)
-
-plot(lag_2hr_mm_logistic, type="p")
-vif(lag_2hr_mm_logistic)
-
 sum_mm_logistic$coefficients %>% 
   data.frame() %>% 
   mutate(odds_diff = odds_func(Estimate), .before = Estimate) %>%
@@ -1053,9 +1043,54 @@ sum_mm_logistic$coefficients %>%
 ```
 
 ```{r}
+# glmer Diagnostics
+# Residuals
+resid_mm <- residuals(lag_2hr_mm_logistic, type = "pearson") # response
+Residuals <- resid_mm
+hist(Residuals) # Shape
+p <- acf2(Residuals) # Autocorrelation
+
+plot(lag_2hr_mm_logistic, type="p")
+
+# linearity assumption
+probabilities <- predict(lag_2hr_mm_logistic, type = "response")
+predicted.classes <- ifelse(probabilities > 0.5, "1", "0")
+
+mydata <- logistic_2hr_df %>%
+  na.omit() %>%
+  dplyr::select(anxiety, atease, depression, happiness, negative_interaction, positive_interaction, time)
+
+predictors <- colnames(mydata)
+
+new_data <- mydata %>%
+  mutate(logit = log(probabilities/(1-probabilities))) %>%
+  gather(key = "predictors", value = "predictor.value", -logit)
+
+ggplot(new_data, aes(logit, predictor.value))+
+  geom_point(size = 0.5, alpha = 0.5) +
+  geom_smooth(method = "loess") + 
+  theme_bw() + 
+  facet_wrap(~predictors, scales = "free_y")
+
+# Influential Points
+model.data <- augment(lag_2hr_mm_logistic) %>% 
+  mutate(index = 1:n()) 
+
+ggplot(data = model.data) + 
+  geom_point(aes(x = index, y = .cooksd), alpha = 0.2) +
+  labs(x = "Observation Index", y = "Cook's Distance", title = "Cook's Distance Plot") +
+  theme_bw()
+
+# Multicollinearity
+car::vif(lag_2hr_mm_logistic)
+```
+
+
+```{r}
 # Bimodal Residuals
 # No correlated residuals
 # Do the simulation comparison to estimate the effect of non normal residuals on the estimates
+# Ask more about the residuals
 ```
 
 
