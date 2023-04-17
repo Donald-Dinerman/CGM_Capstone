@@ -73,6 +73,8 @@ library(sjPlot)
 library(astsa)
 library(forecast)
 library(MASS)
+library(car)
+library(stringr)
 ```
 
 ```{r}
@@ -916,9 +918,32 @@ gran_2hr_df %>%
 
 
 ```{r}
+#table(raw_data$tbh2pump - raw_data$tbh1pump)
+
+# Custom Pump Variable
+fall_pump <- raw_data %>%
+  dplyr::filter(spring == 0) %>%
+  dplyr::select(respid, spring, tbh1pump)
+
+spring_pump <- raw_data %>%
+  dplyr::filter(spring == 1) %>%
+  dplyr::select(respid, spring, tbh1pump = tbh2pump)
+
+pump_comb <- rbind(fall_pump, spring_pump) %>% 
+  rename(., pump_comb = tbh1pump) %>%
+  distinct(respid, spring, pump_comb)
+
+temp <- left_join(raw_data, pump_comb, by = c("respid", "spring"))
+
+#dplyr::select(raw_data, respid, spring)
+#dplyr::select(temp, respid, spring, pump_comb)
+
+# Foreign keys: respid, spring
+raw_data$mod_pump <- temp$pump_comb
+
 # Set Data
 logistic_gran_2hr_df <- raw_data %>%
-  dplyr::select(TAR_bin_2h, respid, spring, tbh1female, weekend, tbh1pump,
+  dplyr::select(TAR_bin_2h, respid, spring, tbh1female, weekend, mod_pump,
                 negative_interaction = frconfl, positive_interaction = frsupp, self_care = dmwell, 
                 anxiety, happiness, depression = depr, atease, eat, exercise = exer
                 ) %>%
@@ -932,7 +957,7 @@ logistic_gran_2hr_df <- raw_data %>%
       tbh1female == 0 ~ "Male",
       tbh1female == 1 ~ "Female",
       tbh1female == 2 ~ "Non Binary"),
-    pump = as.factor(tbh1pump),
+    pump = as.factor(mod_pump),
     .keep = "unused", .after = TAR_bin_2h) %>%
   filter(gender != "Non Binary")
 
@@ -947,35 +972,21 @@ logistic_impute_list_2hr <- make.blocks(c("TAR_bin_2h"))
 logistic_imputed_Data_2hr <- mice(logistic_gran_2hr_df, m=2, maxit = 50, method = 'logreg', seed = 500, blocks = logistic_impute_list_2hr)
 
 logistic_completeData_2hr <- complete(logistic_imputed_Data_2hr, 1)
+
+table(raw_data$tbh1pump)
+table(raw_data$tbh2pump)
+
+#dplyr::select(raw_data, respid, tbh1pump, tbh2pump)
 ```
 
 
 ```{r}
 # Use binary response and respective lag
+# 1 means they are above range
 logistic_2hr_df <- logistic_completeData_2hr %>%
-  mutate(TAR_bin_2h_lagged = lag(TAR_bin_2h, n = 1, default = NA), .before = week) %>%
+  mutate(TAR_bin_2h = ifelse(TAR_bin_2h == 0, 1, 0), # Flip variable, to achieve more intuitive meaning
+         TAR_bin_2h_lagged = lag(TAR_bin_2h, n = 1, default = NA), .before = week) %>%
   drop_na(TAR_bin_2h_lagged)
-
-# Fit Model
-lag_2hr_logistic <- glm(TAR_bin_2h ~ TAR_bin_2h_lagged + time + week + spring + gender + pump + positive_interaction + negative_interaction +
-                          self_care + anxiety + happiness + depression + atease + eat + exercise,
-                        data = logistic_2hr_df, 
-                        family = "binomial")
-
-#Model Summary
-summary(lag_2hr_logistic)
-
-# Model Diagnostics
-par(mfrow=c(2,2))
-plot(lag_2hr_logistic)
-
-# Residual Shape
-hist(resid(lag_2hr_logistic))
-
-# Multicollinearity
-car::vif(lag_2hr_logistic)
-
-acf2(resid(lag_2hr_logistic)) # ARMA(1,1)
 ```
 
 ```{r}
@@ -984,26 +995,67 @@ lag_2hr_mm_logistic <- glmer(TAR_bin_2h ~ (1 | respid) + TAR_bin_2h_lagged + tim
                                positive_interaction + negative_interaction + self_care + anxiety + happiness + depression + 
                                atease + eat + exercise,
                              data = logistic_2hr_df, 
-                             family = binomial, control = glmerControl(optimizer ="bobyqa")) # Nelder_Mead
+                             family = binomial, control = glmerControl(optimizer ="Nelder_Mead")) # bobyqa
 
 # Model Summary
-summary(lag_2hr_mm_logistic)
+sum_mm_logistic <- summary(lag_2hr_mm_logistic)
 
-# print the mod results without correlations among fixed effects
-print(lag_2hr_mm_logistic, corr = FALSE)
-
-# Shape of residuals
-resid_mm <- resid(lag_2hr_mm_logistic)
-hist(resid_mm)
-qqnorm(resid_mm); qqline(resid_mm)
-acf2(resid_mm) # ARMA(1,1)
-```
-
-```{r}
 odds_func <- function(x){
+  val <- exp(x)
+  return(val)
+}
+
+interp_odds_func <- function(x){
   val <- exp(x) - 1
   return(val)
 }
+
+# print the mod results without correlations among fixed effects
+# print(lag_2hr_mm_logistic, corr = FALSE)
+
+# Shape of residuals
+resid_mm <- residuals(lag_2hr_mm_logistic, type = "pearson") # response
+Residuals <- resid_mm
+hist(Residuals)
+#qqnorm(resid_mm); qqline(resid_mm)
+acf2(Residuals)
+
+plot(lag_2hr_mm_logistic, type="p")
+vif(lag_2hr_mm_logistic)
+
+sum_mm_logistic$coefficients %>% 
+  data.frame() %>% 
+  mutate(odds_diff = odds_func(Estimate), .before = Estimate) %>%
+  rownames_to_column(var = "var_name") %>%
+  rename(., se = Std..Error, p_val = Pr...z..) %>%
+    mutate(Significant = ifelse(p_val < 0.05, 1, 0),
+         val_lower = round(Estimate - 1.96*se, 3),
+         val_upper = round(Estimate + 1.96*se, 3),
+         odds_lower = round(odds_func(val_lower), 3),
+         odds_upper = round(odds_func(val_upper), 3),
+         odds_ci = paste("[",odds_lower, ", ", odds_upper,"]", sep=""),
+         var_name = case_when(
+           var_name == "TAR_bin_2h_lagged1" ~ "TAR Lag",
+           var_name == "springSpring" ~ "Spring",
+           var_name == "genderMale" ~ "Male",
+           var_name == "pump1" ~ "Pump",
+           var_name == "positive_interaction" ~ "Positive Interaction",
+           var_name == "negative_interaction" ~ "Negative Interaction",
+           var_name == "self_care" ~ "Self Care",
+           var_name == "atease" ~ "At Ease",
+           TRUE ~ str_to_title(var_name)
+  )) %>%
+  dplyr::select(var_name, odds_diff, odds_ci, Estimate, p_val, Significant) %>%
+  rename(., Variable = var_name, `Odds` = odds_diff, `Odds CI` = odds_ci, `P Value` = p_val) %>%
+  mutate_if(is.numeric, round, digits = 3) %>%
+  kbl() %>%
+  kable_classic()
+```
+
+```{r}
+# Bimodal Residuals
+# No correlated residuals
+# Do the simulation comparison to estimate the effect of non normal residuals on the estimates
 ```
 
 
@@ -1030,16 +1082,24 @@ pql_error_sum$tTable %>%
   data.frame() %>% 
   mutate(odds_diff = odds_func(Value), .before = Value) %>%
   rownames_to_column(var = "var_name") %>%
-  mutate(significant = ifelse(p.value < 0.05, 1, 0)) %>%
-  dplyr::select(var_name, odds_diff, Value, p.value, significant) %>%
+    mutate(significant = ifelse(p.value < 0.05, 1, 0),
+         val_lower = round(Value - 1.96*Std.Error, 3),
+         val_upper = round(Value + 1.96*Std.Error, 3),
+         odds_lower = round(odds_func(val_lower), 3),
+         odds_upper = round(odds_func(val_upper), 3),
+         odds_ci = paste("[",odds_lower, ", ", odds_upper,"]", sep="")) %>%
+  dplyr::select(var_name, odds_diff, odds_ci, Value, p.value, significant) %>%
   mutate_if(is.numeric, round, digits = 3) %>%
   kbl() %>%
   kable_classic()
 
 # Shape of residuals
-fin_resid <- resid(lag_2hr_mm_logistic_error)
+fin_fit <- predict(lag_2hr_mm_logistic_error, newdata = logistic_2hr_df, type = "response")
+num_resp <- as.numeric(logistic_2hr_df$TAR_bin_2h) - 1
 
-hist(fin_resid)
+fin_resid <- residuals(lag_2hr_mm_logistic_error, type = "pearson") #fin_fit - num_resp
+
+hist(fin_resid, breaks = 200)
 qqnorm(fin_resid); qqline(fin_resid)
 acf2(fin_resid)
 ```
@@ -1066,11 +1126,18 @@ pql_sum$tTable %>%
   kable_classic()
 
 # Shape of residuals
-resid_mm_pql <- resid(lag_2hr_mm_logistic_pql)
+resid_mm_pql <- resid(lag_2hr_mm_logistic_pql, type = "pearson")
 
 hist(resid_mm_pql)
 qqnorm(resid_mm_pql); qqline(resid_mm_pql)
 acf2(resid_mm_pql)
+
+# Temporal autocorrelation logistic regression
+# What is the error for a logistic regression
+# Pump variable
+  # TBH1 is fall, TBH2 is spring
+  # Make into one "pump" variable and use it
+# Math behind correlation in glmmPQL (send to prof)
 ```
 
 
