@@ -1025,7 +1025,7 @@ sum_mm_logistic$coefficients %>%
          odds_upper = round(odds_func(val_upper), 3),
          odds_ci = paste("[",odds_lower, ", ", odds_upper,"]", sep=""),
          var_name = case_when(
-           var_name == "TAR_bin_2h_lagged1" ~ "TAR Lag",
+           var_name == "TAR_bin_2h_lagged" ~ "TAR Lag",
            var_name == "springSpring" ~ "Spring",
            var_name == "genderMale" ~ "Male",
            var_name == "pump1" ~ "Pump",
