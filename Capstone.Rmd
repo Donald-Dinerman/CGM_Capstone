@@ -1072,7 +1072,7 @@ ggplot(new_data, aes(logit, predictor.value))+
   theme_bw() + 
   facet_wrap(~predictors, scales = "free_y")
 
-# Influential Points
+# Influential Points (0.5 threshold)
 model.data <- augment(lag_2hr_mm_logistic) %>% 
   mutate(index = 1:n()) 
 
