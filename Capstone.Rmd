@@ -916,7 +916,6 @@ gran_2hr_df %>%
 # Using glmmPQL achieves more normal residuals
 ```
 
-
 ```{r}
 #table(raw_data$tbh2pump - raw_data$tbh1pump)
 
@@ -943,7 +942,7 @@ raw_data$mod_pump <- temp$pump_comb
 
 # Set Data
 logistic_gran_2hr_df <- raw_data %>%
-  dplyr::select(TAR_bin_2h, respid, spring, tbh1female, weekend, mod_pump,
+  dplyr::select(TAR_bin_2h, respid, spring, tbh1female, weekend, mod_pump, interaction = int,
                 negative_interaction = frconfl, positive_interaction = frsupp, self_care = dmwell, 
                 anxiety, happiness, depression = depr, atease, eat, exercise = exer
                 ) %>%
@@ -965,7 +964,37 @@ logistic_gran_2hr_df <- raw_data %>%
 logistic_gran_2hr_df %>%
   dplyr::select(everything()) %>%  # replace to your needs
   summarise_all(funs(sum(is.na(.))))
+```
 
+```{r}
+# Fix Interaction missing data/interaction variable
+# The two obs with missing interaction has missing positive/negative emotion
+# Make them all zero
+#raw_data$int %>% table()
+
+#int_miss_ind <- is.na(raw_data$int) %>% which()
+
+#int_df <- raw_data %>%
+#  dplyr::select(int, negative_interaction = frconfl, positive_interaction = frsupp)
+
+# int_df[int_miss_ind,]
+
+
+# Propotion Missing
+logistic_gran_2hr_df %>% 
+  is.na() %>%
+  colMeans() %>%
+  round(2) %>%
+  sort()
+
+# Make missing interactions zero
+int_fix_df <- logistic_gran_2hr_df %>%
+  mutate(interaction = coalesce(interaction, 0),
+         positive_interaction = coalesce(positive_interaction, 0),
+         negative_interaction = coalesce(negative_interaction, 0))
+```
+
+```{r}
 # Imputation
 logistic_impute_list_2hr <- make.blocks(c("TAR_bin_2h"))
 
@@ -977,6 +1006,10 @@ table(raw_data$tbh1pump)
 table(raw_data$tbh2pump)
 
 #dplyr::select(raw_data, respid, tbh1pump, tbh2pump)
+
+complete(logistic_imputed_Data_2hr, 1)
+
+complete(logistic_imputed_Data_2hr, 2)
 ```
 
 
@@ -991,8 +1024,8 @@ logistic_2hr_df <- logistic_completeData_2hr %>%
 
 ```{r}
 # Fit Mixed Model
-lag_2hr_mm_logistic <- glmer(TAR_bin_2h ~ (1 | respid) + TAR_bin_2h_lagged + time + week + spring + gender + pump +
-                               positive_interaction + negative_interaction + self_care + anxiety + happiness + depression + 
+lag_2hr_mm_logistic <- glmer(TAR_bin_2h ~ (1 | respid) + TAR_bin_2h_lagged + time + week + spring + gender + pump + interaction +
+                               I(interaction*positive_interaction) + I(interaction*negative_interaction) + self_care + anxiety + happiness + depression + 
                                atease + eat + exercise,
                              data = logistic_2hr_df, 
                              family = binomial, control = glmerControl(optimizer ="Nelder_Mead")) # bobyqa
@@ -1030,9 +1063,10 @@ sum_mm_logistic$coefficients %>%
            var_name == "genderMale" ~ "Male",
            var_name == "pump1" ~ "Pump",
            var_name == "positive_interaction" ~ "Positive Interaction",
-           var_name == "negative_interaction" ~ "Negative Interaction",
            var_name == "self_care" ~ "Self Care",
            var_name == "atease" ~ "At Ease",
+           var_name == "I(interaction*positive_interaction)" ~ "Positive Interaction",
+           var_name == "I(interaction*negative_interaction)" ~ "Negative Interaction",
            TRUE ~ str_to_title(var_name)
   )) %>%
   dplyr::select(var_name, odds_diff, odds_ci, Estimate, p_val, Significant) %>%
@@ -1086,15 +1120,9 @@ car::vif(lag_2hr_mm_logistic)
 ```
 
 
-```{r}
-# Bimodal Residuals
-# No correlated residuals
-# Do the simulation comparison to estimate the effect of non normal residuals on the estimates
-# Ask more about the residuals
-```
 
 
-```{r}
+```{r,eval=F}
 # Autocorrelation Error Structure
 fit_3 <- auto.arima(resid_mm, trace = T, seasonal = F, stepwise = F, approximation = F)
 summary(fit_3)
@@ -1139,7 +1167,7 @@ qqnorm(fin_resid); qqline(fin_resid)
 acf2(fin_resid)
 ```
 
-```{r}
+```{r,eval=F}
 # No correlated errors bc white noise originally
 lag_2hr_mm_logistic_pql <- glmmPQL(TAR_bin_2h ~ TAR_bin_2h_lagged + time + week + spring + gender + pump +
                                        positive_interaction + negative_interaction + self_care + anxiety + happiness + depression + 
