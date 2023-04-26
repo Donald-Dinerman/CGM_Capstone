@@ -557,11 +557,64 @@ $$
 $$
 \begin{aligned}
 
-y_{itds} =& \; \alpha_{i} + \beta^{lag} y_{i(t-1)ds} + \beta^{time}x^{time}_{t} + \beta^{week} x^{week}_{d} + \beta^{season} x^{season}_{s} + \beta^{gender}x^{gender}_{i} +  \beta^{mood} x^{mood}_{itds} +  \beta^{positive \:interactions} x^{positive \:interactions}_{itds} +
+y_{itds} =& \; \alpha_{i} + \beta^{lag} y_{i(t-1)ds} + \beta^{time}x^{time}_{t} + \beta^{week} x^{week}_{d} + \beta^{season} x^{season}_{s} + \beta^{gender}x^{gender}_{i} +  
 
 \\ &
 
-\beta^{negative \:interactions} x^{negative \:interactions}_{itds} + \beta^{self care}x^{self care}_{itds} + \beta^{eat}x^{eat}_{itds} + \beta^{exercise}x^{exercise}_{itds} + \epsilon_{itds}
+\beta^{pump}x^{pump}_{is} +  \beta^{\:contact} x^{contact}_{itds} + \beta^{positive \:contact} x^{positive \:contact}_{itds} + \beta^{negative \:contact} x^{negative \:contact}_{itds} +
+
+\\ &
+
+\beta^{self\:care}x^{self\:care}_{itds} +  \beta^{anxiety}x^{anxiety}_{itds} + \beta^{happiness}x^{happiness}_{itds} + \beta^{depression}x^{depression}_{itds} +
+
+\\ &
+
+\beta^{at \:ease}x^{at \: ease}_{itds} +  \beta^{eat}x^{eat}_{itds} + \beta^{exercise}x^{exercise}_{itds} + \epsilon_{itds}
+
+\end{aligned}
+$$
+
+$$
+\begin{aligned}
+
+y_{itds} =& \; \alpha_{i} + \beta^{lag} y_{i(t-1)ds} + \beta^{time}x^{time}_{t} + \beta^{week} x^{week}_{d} + \beta^{season} x^{season}_{s} + \beta^{gender}x^{gender}_{i} +  
+
+\\ &
+
+\beta^{pump}x^{pump}_{is} +  \beta^{\:contact} x^{contact}_{i(t-1)ds} + \beta^{positive \:contact} x^{positive \:contact}_{i(t-1)ds} + \beta^{negative \:contact} x^{negative \:contact}_{i(t-1)ds} +
+
+\\ &
+
+\beta^{self\:care}x^{self\:care}_{i(t-1)ds} +  \beta^{anxiety}x^{anxiety}_{i(t-1)ds} + \beta^{happiness}x^{happiness}_{i(t-1)ds} + \beta^{depression}x^{depression}_{i(t-1)ds} +
+
+\\ &
+
+\beta^{at \:ease}x^{at \: ease}_{i(t-1)ds} +  \beta^{eat}x^{eat}_{i(t-1)ds} + \beta^{exercise}x^{exercise}_{i(t-1)ds} + \epsilon_{i(t-1)ds}
+
+\end{aligned}
+$$
+
+$$
+\begin{aligned}
+
+y_{itds} =& \; \alpha_{i} + \beta^{lag} y_{i(t-1)ds} + \beta^{time}x^{time}_{t} + \beta^{week} x^{week}_{d} + \beta^{season} x^{season}_{s} + \beta^{gender}x^{gender}_{i} +  
+
+\\ &
+
+\beta^{pump}x^{pump}_{is} +  \beta^{\:contact} x^{contact}_{itds} + \beta^{positive \:contact} x^{positive \:contact}_{itds} + \beta^{negative \:contact} x^{negative \:contact}_{itds} +
+
+\\ &
+
+\beta^{self\:care}x^{self\:care}_{itds} +  \beta^{anxiety}x^{anxiety}_{itds} + \beta^{happiness}x^{happiness}_{itds} + \beta^{depression}x^{depression}_{itds} +
+
+\\ &
+
+\beta^{at \:ease}x^{at \: ease}_{itds} +  \beta^{eat}x^{eat}_{itds} + \beta^{exercise}x^{exercise}_{itds} + \beta^{int_1}x^{self\:care}_{itds}x^{anxiety}_{itds} + \beta^{int_2}x^{self\:care}_{itds}x^{happiness}_{itds} + 
+
+\\ &
+
+\beta^{int_3}x^{self\:care}_{itds}x^{depression}_{itds}+ \beta^{int_4}x^{self\:care}_{itds}x^{at \: ease}_{itds}
+\epsilon_{itds}
 
 \end{aligned}
 $$
@@ -979,19 +1032,35 @@ logistic_gran_2hr_df %>%
 
 # int_df[int_miss_ind,]
 
-
-# Propotion Missing
-logistic_gran_2hr_df %>% 
-  is.na() %>%
-  colMeans() %>%
-  round(2) %>%
-  sort()
-
 # Make missing interactions zero
 int_fix_df <- logistic_gran_2hr_df %>%
   mutate(interaction = coalesce(interaction, 0),
          positive_interaction = coalesce(positive_interaction, 0),
          negative_interaction = coalesce(negative_interaction, 0))
+
+# Propotion Missing
+int_fix_df %>% 
+  is.na() %>%
+  colMeans() %>%
+  round(4) %>%
+  sort() %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column("Variable") %>%
+  rename(., "Proportion Missing" = `.`) %>%
+    mutate(Variable = case_when(
+           Variable == "TAR_bin_2h" ~ "TAR",
+           Variable == "springSpring" ~ "Spring",
+           Variable == "genderMale" ~ "Male",
+           Variable == "pump1" ~ "Pump",
+           Variable == "self_care" ~ "Self Care",
+           Variable == "atease" ~ "At Ease",
+           Variable == "interaction" ~ "Contact",
+           Variable == "positive_interaction" ~ "Positive Contact",
+           Variable == "negative_interaction" ~ "Negative Contact",
+           TRUE ~ str_to_title(Variable)
+  )) %>%
+  kbl(table.attr = "style='width:40%;'") %>%
+  kable_classic()
 ```
 
 ```{r}
