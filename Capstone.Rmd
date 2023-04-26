@@ -1016,7 +1016,7 @@ complete(logistic_imputed_Data_2hr, 2)
 ```{r}
 # Use binary response and respective lag
 # 1 means they are above range
-logistic_2hr_df <- logistic_completeData_2hr %>%
+logistic_2hr_df <- int_fix_df %>%
   mutate(TAR_bin_2h = ifelse(TAR_bin_2h == 0, 1, 0), # Flip variable, to achieve more intuitive meaning
          TAR_bin_2h_lagged = lag(TAR_bin_2h, n = 1, default = NA), .before = week) %>%
   drop_na(TAR_bin_2h_lagged)
@@ -1024,8 +1024,9 @@ logistic_2hr_df <- logistic_completeData_2hr %>%
 
 ```{r}
 # Fit Mixed Model
-lag_2hr_mm_logistic <- glmer(TAR_bin_2h ~ (1 | respid) + TAR_bin_2h_lagged + time + week + spring + gender + pump + interaction +
-                               I(interaction*positive_interaction) + I(interaction*negative_interaction) + self_care + anxiety + happiness + depression + 
+lag_2hr_mm_logistic <- glmer(TAR_bin_2h ~ (1 | respid) + TAR_bin_2h_lagged + time + week + spring + gender + pump + 
+                               interaction + positive_interaction + negative_interaction +
+                               self_care + anxiety + happiness + depression + 
                                atease + eat + exercise,
                              data = logistic_2hr_df, 
                              family = binomial, control = glmerControl(optimizer ="Nelder_Mead")) # bobyqa
@@ -1062,11 +1063,11 @@ sum_mm_logistic$coefficients %>%
            var_name == "springSpring" ~ "Spring",
            var_name == "genderMale" ~ "Male",
            var_name == "pump1" ~ "Pump",
-           var_name == "positive_interaction" ~ "Positive Interaction",
            var_name == "self_care" ~ "Self Care",
            var_name == "atease" ~ "At Ease",
-           var_name == "I(interaction*positive_interaction)" ~ "Positive Interaction",
-           var_name == "I(interaction*negative_interaction)" ~ "Negative Interaction",
+           var_name == "interaction" ~ "Contact",
+           var_name == "positive_interaction" ~ "Positive Contact",
+           var_name == "negative_interaction" ~ "Negative Contact",
            TRUE ~ str_to_title(var_name)
   )) %>%
   dplyr::select(var_name, odds_diff, odds_ci, Estimate, p_val, Significant) %>%
@@ -1075,6 +1076,18 @@ sum_mm_logistic$coefficients %>%
   kbl() %>%
   kable_classic()
 ```
+
+```{r}
+# Interpret interaction effect
+# y = beta_0 + beta_1 (x-x_bar) + beta_2(z-z_bar)
+beta_0 <- sum_mm_logistic$coefficients[8,1] # Effect of interaction for someone with "average" positive and negative interactions
+beta_1 <- sum_mm_logistic$coefficients[9,1] # difference from the mean positive interaction
+beta_2 <- sum_mm_logistic$coefficients[10,1] # difference from the mean negative interaction
+
+ggplot(logistic_2hr_df) +
+  geom_point(aes(x = negative_interaction, y = positive_interaction))
+```
+
 
 ```{r}
 # glmer Diagnostics
