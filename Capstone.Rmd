@@ -1064,44 +1064,72 @@ int_fix_df %>%
 ```
 
 ```{r}
-# Imputation
-logistic_impute_list_2hr <- make.blocks(c("TAR_bin_2h"))
+# Imputation for 10 times
+logistic_impute_list_2hr <- make.blocks(c("TAR_bin_2h", "anxiety", "depression", 
+                                          "atease", "self_care", "eat", "exercise"))
 
-logistic_imputed_Data_2hr <- mice(logistic_gran_2hr_df, m=2, maxit = 50, method = 'logreg', seed = 500, blocks = logistic_impute_list_2hr)
+logistic_imputed_Data_2hr <- mice(int_fix_df, m=10, maxit = 50, method = 
+                                    list(TAR_bin_2h ='logreg', anxiety = "pmm", 
+                                         depression = "pmm", atease = "pmm", 
+                                         self_care = "pmm", eat = "pmm",
+                                         exercise = "pmm"), 
+                                  seed = 500, blocks = logistic_impute_list_2hr)
 
-logistic_completeData_2hr <- complete(logistic_imputed_Data_2hr, 1)
+# Can use the below command to see the first imputed data set
+# logistic_completeData_2hr <- complete(logistic_imputed_Data_2hr, 1)
 
-table(raw_data$tbh1pump)
-table(raw_data$tbh2pump)
+# table(raw_data$tbh1pump)
+# table(raw_data$tbh2pump)
 
 #dplyr::select(raw_data, respid, tbh1pump, tbh2pump)
 
-complete(logistic_imputed_Data_2hr, 1)
+# complete(logistic_imputed_Data_2hr, 1)
 
-complete(logistic_imputed_Data_2hr, 2)
+# complete(logistic_imputed_Data_2hr, 2)
 ```
 
+```{r}
+# Use a list to store all the original imputed data sets
+imp_logistic_list <- list()
+
+for (i in 1:10) {
+  imp_logistic_list[[i]] <- complete(logistic_imputed_Data_2hr, i)
+}
+```
 
 ```{r}
-# Use binary response and respective lag
+# Use binary response and respective lag for all the imputed data sets
 # 1 means they are above range
-logistic_2hr_df <- int_fix_df %>%
+logistic_2hr_df <- list()
+for (i in 1:10){
+logistic_2hr_df[[i]] <- imp_logistic_list[[i]] %>%
   mutate(TAR_bin_2h = ifelse(TAR_bin_2h == 0, 1, 0), # Flip variable, to achieve more intuitive meaning
          TAR_bin_2h_lagged = lag(TAR_bin_2h, n = 1, default = NA), .before = week) %>%
-  drop_na(TAR_bin_2h_lagged)
+  drop_na(TAR_bin_2h_lagged)}
 ```
 
+
 ```{r}
-# Fit Mixed Model
-lag_2hr_mm_logistic <- glmer(TAR_bin_2h ~ (1 | respid) + TAR_bin_2h_lagged + time + week + spring + gender + pump + 
-                               interaction + positive_interaction + negative_interaction +
-                               self_care + anxiety + happiness + depression + 
-                               atease + eat + exercise,
-                             data = logistic_2hr_df, 
-                             family = binomial, control = glmerControl(optimizer ="Nelder_Mead")) # bobyqa
+# Fit Non-lagged Mixed Model
+# Run the model for all the imputed data sets using function map()
+# The model for just the i_th data set can be written as 
+# lag_2hr_mm_logistic <- glmer(TAR_bin_2h ~ (1 | respid) + TAR_bin_2h_lagged + time + week + spring + gender + pump + 
+#                               interaction + positive_interaction + negative_interaction +
+#                               self_care + anxiety + happiness + depression + 
+#                               atease + eat + exercise,
+#                             data = logistic_2hr_df[[i]], 
+#                             family = binomial, control = glmerControl(optimizer ="Nelder_Mead")) # bobyqa
+lag_2hr_mm_logistic <- map(logistic_2hr_df,
+                           ~ glmer(TAR_bin_2h ~ (1 | respid) + TAR_bin_2h_lagged + time + week + 
+                                     spring + gender + pump + interaction + positive_interaction +                                            negative_interaction + self_care + anxiety + happiness +
+                                     depression + atease + eat + exercise, data = .,
+                             family = binomial, control = glmerControl(optimizer ="Nelder_Mead"))) # bobyqa
+
+# Combine the outcomes from 10 models using pool() function
+lag_2hr_mm_logistic_pool <- pool(lag_2hr_mm_logistic)
 
 # Model Summary
-sum_mm_logistic <- summary(lag_2hr_mm_logistic)
+sum_mm_logistic <- summary(lag_2hr_mm_logistic_pool)
 
 odds_func <- function(x){
   val <- exp(x)
@@ -1116,14 +1144,44 @@ interp_odds_func <- function(x){
 # print the mod results without correlations among fixed effects
 # print(lag_2hr_mm_logistic, corr = FALSE)
 
-sum_mm_logistic$coefficients %>% 
+# The model summary that can be used for just running model for one data set(no map(), no pool())
+# sum_mm_logistic$coefficients %>% 
+#   data.frame() %>% 
+#   mutate(odds_diff = odds_func(Estimate), .before = Estimate) %>%
+#   rownames_to_column(var = "var_name") %>%
+#   rename(., se = Std..Error, p_val = Pr...z..) %>%
+#     mutate(Significant = ifelse(p_val < 0.05, 1, 0),
+#          val_lower = round(Estimate - 1.96*se, 3),
+#          val_upper = round(Estimate + 1.96*se, 3),
+#          odds_lower = round(odds_func(val_lower), 3),
+#          odds_upper = round(odds_func(val_upper), 3),
+#          odds_ci = paste("[",odds_lower, ", ", odds_upper,"]", sep=""),
+#          var_name = case_when(
+#            var_name == "TAR_bin_2h_lagged" ~ "TAR Lag",
+#            var_name == "springSpring" ~ "Spring",
+#            var_name == "genderMale" ~ "Male",
+#            var_name == "pump1" ~ "Pump",
+#            var_name == "self_care" ~ "Self Care",
+#            var_name == "atease" ~ "At Ease",
+#            var_name == "interaction" ~ "Contact",
+#            var_name == "positive_interaction" ~ "Positive Contact",
+#            var_name == "negative_interaction" ~ "Negative Contact",
+#            TRUE ~ str_to_title(var_name)
+#   )) %>%
+#   dplyr::select(var_name, odds_diff, odds_ci, Estimate, p_val, Significant) %>%
+#   rename(., Variable = var_name, `Odds` = odds_diff, `Odds CI` = odds_ci, `P Value` = p_val) %>%
+#   mutate_if(is.numeric, round, digits = 3) %>%
+#   kbl() %>%
+#   kable_classic()
+
+# The model summary for the pooled outcome
+sum_mm_logistic %>% 
   data.frame() %>% 
-  mutate(odds_diff = odds_func(Estimate), .before = Estimate) %>%
-  rownames_to_column(var = "var_name") %>%
-  rename(., se = Std..Error, p_val = Pr...z..) %>%
+  mutate(odds_diff = odds_func(estimate), .before = estimate) %>%
+  rename(., se = std.error, p_val = p.value, var_name = term) %>%
     mutate(Significant = ifelse(p_val < 0.05, 1, 0),
-         val_lower = round(Estimate - 1.96*se, 3),
-         val_upper = round(Estimate + 1.96*se, 3),
+         val_lower = round(estimate - 1.96*se, 3),
+         val_upper = round(estimate + 1.96*se, 3),
          odds_lower = round(odds_func(val_lower), 3),
          odds_upper = round(odds_func(val_upper), 3),
          odds_ci = paste("[",odds_lower, ", ", odds_upper,"]", sep=""),
@@ -1132,15 +1190,16 @@ sum_mm_logistic$coefficients %>%
            var_name == "springSpring" ~ "Spring",
            var_name == "genderMale" ~ "Male",
            var_name == "pump1" ~ "Pump",
-           var_name == "self_care" ~ "Self Care",
-           var_name == "atease" ~ "At Ease",
            var_name == "interaction" ~ "Contact",
            var_name == "positive_interaction" ~ "Positive Contact",
            var_name == "negative_interaction" ~ "Negative Contact",
+           var_name == "self_care" ~ "Self Care",
+           var_name == "atease" ~ "At Ease",
            TRUE ~ str_to_title(var_name)
   )) %>%
-  dplyr::select(var_name, odds_diff, odds_ci, Estimate, p_val, Significant) %>%
-  rename(., Variable = var_name, `Odds` = odds_diff, `Odds CI` = odds_ci, `P Value` = p_val) %>%
+  dplyr::select(var_name, odds_diff, odds_ci, estimate, p_val, Significant) %>%
+  rename(., Variable = var_name, `Odds` = odds_diff, `Odds CI` = odds_ci, `P Value` = p_val,
+         `Estimate` = estimate) %>%
   mutate_if(is.numeric, round, digits = 3) %>%
   kbl() %>%
   kable_classic()
@@ -1149,17 +1208,17 @@ sum_mm_logistic$coefficients %>%
 ```{r}
 # Interpret interaction effect
 # y = beta_0 + beta_1 (x-x_bar) + beta_2(z-z_bar)
-beta_0 <- sum_mm_logistic$coefficients[8,1] # Effect of interaction for someone with "average" positive and negative interactions
-beta_1 <- sum_mm_logistic$coefficients[9,1] # difference from the mean positive interaction
-beta_2 <- sum_mm_logistic$coefficients[10,1] # difference from the mean negative interaction
+beta_0 <- sum_mm_logistic$coefficients[8] # Effect of interaction for someone with "average" positive and negative interactions
+beta_1 <- sum_mm_logistic$coefficients[9] # difference from the mean positive interaction
+beta_2 <- sum_mm_logistic$coefficients[10] # difference from the mean negative interaction
 
 ggplot(logistic_2hr_df) +
   geom_point(aes(x = negative_interaction, y = positive_interaction))
 ```
 
 
-```{r}
-# glmer Diagnostics
+```{r, comment=NA}
+# glmer Diagnostics for single model
 # Residuals
 resid_mm <- residuals(lag_2hr_mm_logistic, type = "pearson") # response
 Residuals <- resid_mm
@@ -1201,7 +1260,215 @@ ggplot(data = model.data) +
 car::vif(lag_2hr_mm_logistic)
 ```
 
+```{r}
+# Model Dignostics for the pooled outcome
 
+# Get the mean residuals for all 10 models
+res_each=NULL
+
+for(i in 1:10){
+  res_each=rbind(res_each,residuals(lag_2hr_mm_logistic[[i]], type = "pearson"))
+  Residuals=colMeans(res_each)}
+
+hist(Residuals, main = "Histogram of Residuals")
+p <- acf2(Residuals)
+# Influential Points (0.5 threshold)
+# Cook's Distance Plot
+augmented_data <- lapply(lag_2hr_mm_logistic, augment) %>%
+  bind_rows()
+
+model.data <- augmented_data %>% 
+  mutate(index = 1:n()) 
+ggplot(data = model.data) + 
+  geom_point(aes(x = index, y = .cooksd), alpha = 0.2) +
+  labs(x = "Observation Index", y = "Cook's Distance", title = "Cook's Distance Plot") +
+  theme_bw()
+```
+
+```{r}
+# data set for lagged covariate model
+# Use binary response and respective lag for all the imputed data sets
+# Use respective lag for specified covariates
+# 1 means they are above range
+lagged_logistic_2hr_df <- list()
+for (i in 1:10){
+lagged_logistic_2hr_df[[i]] <- imp_logistic_list[[i]] %>%
+  mutate(TAR_bin_2h = ifelse(TAR_bin_2h == 0, 1, 0), # Flip variable, to achieve more intuitive meaning
+         TAR_bin_2h_lagged = lag(TAR_bin_2h, n = 1, default = NA), 
+         interaction_lagged = lag(interaction, n = 1, default = NA),
+         anxiety_lagged = lag(anxiety, n = 1, default = NA),
+         depression_lagged = lag(depression, n = 1, default = NA),
+         happiness_lagged = lag(happiness, n = 1, default = NA),
+         atease_lagged = lag(atease, n = 1, default = NA),
+         positive_interaction_lagged = lag(positive_interaction, n = 1, default = NA),
+         negative_interaction_lagged = lag(negative_interaction, n = 1, default = NA),
+         self_care_lagged = lag(self_care, n = 1, default = NA),
+         eat_lagged = lag(eat, n = 1, default = NA),
+         exercise_lagged = lag(exercise, n = 1, default = NA),
+         .before = week) %>%
+  drop_na(TAR_bin_2h_lagged, interaction_lagged, anxiety_lagged, depression_lagged, happiness_lagged,
+          atease_lagged, positive_interaction_lagged, negative_interaction_lagged,
+          self_care_lagged, eat_lagged, exercise_lagged)}
+
+```
+
+```{r}
+# Fit lagged covariate Model for all the data sets using map()
+lagged_2hr_mm_logistic <-map(lagged_logistic_2hr_df, ~ glmer(TAR_bin_2h ~ (1 | respid) + 
+                            TAR_bin_2h_lagged + time + week + spring + gender + pump + 
+                              interaction_lagged + positive_interaction_lagged +
+                              negative_interaction_lagged + self_care_lagged + anxiety_lagged +
+                              happiness_lagged + depression_lagged + atease_lagged + eat_lagged +
+                              exercise_lagged, data = ., family = binomial, 
+                            control = glmerControl(optimizer ="Nelder_Mead"))) # bobyqa
+
+# Combine the outcomes of 10 models using pool() function
+lagged_2hr_mm_logistic_pool <- pool(lagged_2hr_mm_logistic)
+
+# Model Summary
+lagged_sum_mm_logistic <- summary(lagged_2hr_mm_logistic_pool)
+```
+
+```{r}
+# Summary for pooled outcome
+lagged_sum_mm_logistic %>% 
+  data.frame() %>% 
+  mutate(odds_diff = odds_func(estimate), .before = estimate) %>%
+  rename(., se = std.error, p_val = p.value, var_name = term) %>%
+    mutate(Significant = ifelse(p_val < 0.05, 1, 0),
+         val_lower = round(estimate - 1.96*se, 3),
+         val_upper = round(estimate + 1.96*se, 3),
+         odds_lower = round(odds_func(val_lower), 3),
+         odds_upper = round(odds_func(val_upper), 3),
+         odds_ci = paste("[",odds_lower, ", ", odds_upper,"]", sep=""),
+         var_name = case_when(
+           var_name == "TAR_bin_2h_lagged" ~ "TAR Lag",
+           var_name == "springSpring" ~ "Spring",
+           var_name == "genderMale" ~ "Male",
+           var_name == "pump1" ~ "Pump",
+           var_name == "interaction_lagged" ~ "Contact Lag",
+           var_name == "anxiety_lagged" ~ "Anxiety Lag",
+           var_name == "happiness_lagged" ~ "Happiness Lag",
+           var_name == "depression_lagged" ~ "Depression Lag",
+           var_name == "self_care_lagged" ~ "Self Care Lag",
+           var_name == "eat_lagged" ~ "Eat Lag",
+           var_name == "exercise_lagged" ~ "Exercise Lag",
+           var_name == "positive_interaction_lagged" ~ "Positive Contact Lag",
+           var_name == "negative_interaction_lagged" ~ "Negative Contact Lag",
+           var_name == "self_care_lagged" ~ "Self Care Lag",
+           var_name == "atease_lagged" ~ "At Ease Lag",
+           TRUE ~ str_to_title(var_name)
+  )) %>%
+  dplyr::select(var_name, odds_diff, odds_ci, estimate, p_val, Significant) %>%
+  rename(., Variable = var_name, `Odds` = odds_diff, `Odds CI` = odds_ci, `P Value` = p_val,
+         `Estimate` = estimate) %>%
+  mutate_if(is.numeric, round, digits = 3) %>%
+  kbl() %>%
+  kable_classic()
+```
+
+```{r}
+# Model Dignostics for the pooled outcome
+
+# Get the mean residuals for all 10 models
+lagged_res_each=NULL
+
+for(i in 1:10){
+  lagged_res_each=rbind(lagged_res_each,residuals(lagged_2hr_mm_logistic[[i]], type = "pearson"))
+  Residuals=colMeans(lagged_res_each)}
+
+hist(Residuals, main = "Histogram of Residuals")
+p <- acf2(Residuals)
+# Influential Points (0.5 threshold)
+# Cook's Distance Plot
+augmented_data <- lapply(lagged_2hr_mm_logistic, augment) %>%
+  bind_rows()
+
+model.data <- augmented_data %>% 
+  mutate(index = 1:n()) 
+ggplot(data = model.data) + 
+  geom_point(aes(x = index, y = .cooksd), alpha = 0.2) +
+  labs(x = "Observation Index", y = "Cook's Distance", title = "Cook's Distance Plot") +
+  theme_bw()
+```
+
+```{r}
+# Self_care and mood interaction model
+mood_2hr_mm_logistic <- map(logistic_2hr_df, ~ glmer(TAR_bin_2h ~ (1 | respid) + 
+                            TAR_bin_2h_lagged + time + week + spring + gender + 
+                            pump + interaction + positive_interaction + negative_interaction + 
+                            self_care + anxiety + happiness + depression + atease + 
+                            eat + exercise + self_care*anxiety + self_care * happiness + 
+                            self_care * depression + self_care * atease, data = .,
+                            family = binomial, control = glmerControl(optimizer ="Nelder_Mead")))# bobyqa
+
+# Combine the outcomes of 10 models using pool() function
+mood_2hr_mm_logistic_pool <- pool(mood_2hr_mm_logistic)
+
+# Model Summary
+mood_sum_mm_logistic <- summary(mood_2hr_mm_logistic_pool)
+```
+
+```{r}
+# Summary for the pooled outcome
+mood_sum_mm_logistic %>% 
+  data.frame() %>% 
+  mutate(odds_diff = odds_func(estimate), .before = estimate) %>%
+  rename(., se = std.error, p_val = p.value, var_name = term) %>%
+    mutate(Significant = ifelse(p_val < 0.05, 1, 0),
+         val_lower = round(estimate - 1.96*se, 3),
+         val_upper = round(estimate + 1.96*se, 3),
+         odds_lower = round(odds_func(val_lower), 3),
+         odds_upper = round(odds_func(val_upper), 3),
+         odds_ci = paste("[",odds_lower, ", ", odds_upper,"]", sep=""),
+         var_name = case_when(
+           var_name == "TAR_bin_2h_lagged" ~ "TAR Lag",
+           var_name == "springSpring" ~ "Spring",
+           var_name == "genderMale" ~ "Male",
+           var_name == "pump1" ~ "Pump",
+           var_name == "interaction" ~ "Contact",
+           var_name == "positive_interaction" ~ "Positive Contact",
+           var_name == "negative_interaction" ~ "Negative Contact",
+           var_name == "self_care" ~ "Self Care",
+           var_name == "atease" ~ "At Ease",
+           var_name == "self_care * anxiety" ~ "Self Care * Anxiety",
+           var_name == "self_care * happiness" ~ "Self Care * Happiness",
+           var_name == "self_care * depression" ~ "Self Care * Depression",
+           var_name == "self_care * atease" ~ "Self Care * At Ease",
+           TRUE ~ str_to_title(var_name)
+  )) %>%
+  dplyr::select(var_name, odds_diff, odds_ci, estimate, p_val, Significant) %>%
+  rename(., Variable = var_name, `Odds` = odds_diff, `Odds CI` = odds_ci, `P Value` = p_val,
+         `Estimate` = estimate) %>%
+  mutate_if(is.numeric, round, digits = 3) %>%
+  kbl() %>%
+  kable_classic()
+```
+
+```{r}
+# Model Dignostics for the pooled outcome
+
+# Get the mean residuals for all 10 models
+mood_res_each=NULL
+
+for(i in 1:10){
+  mood_res_each=rbind(mood_res_each,residuals(mood_2hr_mm_logistic[[i]], type = "pearson"))
+  Residuals=colMeans(mood_res_each)}
+
+hist(Residuals, main = "Histogram of Residuals")
+p <- acf2(Residuals)
+# Influential Points (0.5 threshold)
+# Cook's Distance Plot
+augmented_data <- lapply(mood_2hr_mm_logistic, augment) %>%
+  bind_rows()
+
+model.data <- augmented_data %>% 
+  mutate(index = 1:n()) 
+ggplot(data = model.data) + 
+  geom_point(aes(x = index, y = .cooksd), alpha = 0.2) +
+  labs(x = "Observation Index", y = "Cook's Distance", title = "Cook's Distance Plot") +
+  theme_bw()
+```
 
 
 ```{r,eval=F}
