@@ -75,6 +75,7 @@ library(forecast)
 library(MASS)
 library(car)
 library(stringr)
+library(purrr)
 ```
 
 ```{r}
