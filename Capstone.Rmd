@@ -1122,7 +1122,7 @@ logistic_2hr_df[[i]] <- imp_logistic_list[[i]] %>%
 #                             family = binomial, control = glmerControl(optimizer ="Nelder_Mead")) # bobyqa
 lag_2hr_mm_logistic <- map(logistic_2hr_df,
                            ~ glmer(TAR_bin_2h ~ (1 | respid) + TAR_bin_2h_lagged + time + week + 
-                                     spring + gender + pump + interaction + positive_interaction +                                            negative_interaction + self_care + anxiety + happiness +
+                                     spring + gender + pump + interaction + positive_interaction + negative_interaction + self_care + anxiety + happiness +
                                      depression + atease + eat + exercise, data = .,
                              family = binomial, control = glmerControl(optimizer ="Nelder_Mead"))) # bobyqa
 
