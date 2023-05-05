@@ -1,3 +1,5 @@
+# CGM Capstone Project
+
 ## Project Overview
 
 The capstone project aims to investigate the relationships between psychosocial variables (such as happiness, depression, anxiety, and social interactions) and blood glucose levels in Southwest Pennsylvania teens with Type 1 diabetes. The data set used in the project includes EMA and CGM data.
